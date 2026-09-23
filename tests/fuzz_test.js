@@ -15,7 +15,7 @@ for(let i=0;i<10000;i++){
   };
   const s=c.sanitizeSettings(raw);
   for(const k of ["lowCutHz","bassDb","warmthDb","clarityDb","airDb","outputDb","detail","width","reality","noiseReduction","spectralFill","dapStrength","selfDapStrength","selfDapRestorationCutoffKhz","perspectiveDepth"]) assert(Number.isFinite(s[k]),k);
-  assert(s.lowCutHz>=20&&s.lowCutHz<=120); assert(s.dapStrength>=0&&s.dapStrength<=100); assert(s.selfDapStrength>=0&&s.selfDapStrength<=100);
+  assert(s.lowCutHz>=5&&s.lowCutHz<=120); assert(s.dapStrength>=0&&s.dapStrength<=100); assert(s.selfDapStrength>=0&&s.selfDapStrength<=100);
   assert(s.selfDapRestorationCutoffKhz>=9&&s.selfDapRestorationCutoffKhz<=18); assert(s.perspectiveDepth>=0&&s.perspectiveDepth<=100);
   const pp=c.perspectiveProfile(s.perspectiveEnabled,s.perspectiveDepth); assert(pp.wet>=0&&pp.wet<=0.12+1e-12); assert(pp.predelaySeconds>=0.003&&pp.predelaySeconds<=0.0131);
   const hr=c.computeAutoHeadroomDb(s); const out=c.computeEffectiveOutputDb(s); assert(Number.isFinite(hr)&&hr<=0&&hr>=-12); assert(Number.isFinite(out)&&out>=-24&&out<=6);

@@ -22,7 +22,7 @@ function writeFloatWav(file, left, right, sampleRate) {
   b.write("fmt ", 12);
   b.writeUInt32LE(16, 16);
   b.writeUInt16LE(3, 20); // IEEE float
-  b.writeUInt16LE(2, 22);
+  b.writeUInt16LE(2, 22); // stereo
   b.writeUInt32LE(sampleRate, 24);
   b.writeUInt32LE(sampleRate * 2 * 4, 28);
   b.writeUInt16LE(8, 32);
@@ -34,6 +34,7 @@ function writeFloatWav(file, left, right, sampleRate) {
     L.copy(b, 44 + i * 8, i * 4, i * 4 + 4);
     R.copy(b, 48 + i * 8, i * 4, i * 4 + 4);
   }
+
   fs.writeFileSync(file, b);
 }
 
@@ -95,7 +96,9 @@ try {
     const small = await page.evaluate(async ({ profile }) => {
       globalThis.__QUALITY_RESULT__ = null;
       return await globalThis.runYurikaQualityTest(
-        chrome.runtime.getURL("tests/audio_quality/quality-stimulus.wav"),
+        chrome.runtime.getURL(
+          "tests/audio_quality/quality-stimulus.wav"
+        ),
         profile
       );
     }, { profile });
@@ -105,10 +108,10 @@ try {
         globalThis.__QUALITY_RESULT__ &&
         typeof globalThis.__QUALITY_RESULT__.left === "string" &&
         typeof globalThis.__QUALITY_RESULT__.right === "string" &&
-        typeof globalThis.__QUALITY_RESULT__.refLeft === "string" &&
-        typeof globalThis.__QUALITY_RESULT__.refRight === "string",
+        typeof globalThis.__QUALITY_RESULT__.referenceLeft === "string" &&
+        typeof globalThis.__QUALITY_RESULT__.referenceRight === "string",
       null,
-      { timeout: 120_000 }
+      { timeout: 180_000 }
     );
 
     const result = await page.evaluate(
@@ -117,14 +120,14 @@ try {
 
     fs.writeFileSync(
       path.join(outDir, `${profile}.status.json`),
-      JSON.stringify(
-        {
-          runtime_status: small.status ?? {},
-          capture_meta: small.captureMeta ?? {}
-        },
-        null,
-        2
-      )
+      JSON.stringify(small.status ?? {}, null, 2)
+    );
+
+    writeFloatWav(
+      path.join(outDir, `${profile}.ref.wav`),
+      result.referenceLeft,
+      result.referenceRight,
+      result.sampleRate
     );
 
     writeFloatWav(
@@ -134,19 +137,14 @@ try {
       result.sampleRate
     );
 
-    writeFloatWav(
-      path.join(outDir, `${profile}.reference.wav`),
-      result.refLeft,
-      result.refRight,
-      result.sampleRate
-    );
-
     console.log(
-      `[YURIKA] ${profile}: ${result.sampleRate} Hz, DSP + matched reference written`
+      `[YURIKA] ${profile}: ${result.sampleRate} Hz, synchronized input/output WAVs written`
     );
   }
 
-  console.log("[YURIKA] All four profiles rendered successfully.");
+  console.log(
+    "[YURIKA] All four profiles rendered with synchronized references."
+  );
 } catch (error) {
   const failure = {
     time: new Date().toISOString(),

@@ -8,11 +8,14 @@
     const t = clamp(strength, 0, 100) / 100;
     const cutoffKhz = clamp(restorationCutoffKhz, 9, 18);
     return Object.freeze({
-      sideHpfHz: 100,
-      sideDelaySeconds: 0.0002,
+      // The main YURIKA low-cut already provides sub-bass protection. Keep only a
+      // fixed 5 Hz side DC/subsonic guard so Self-DAP does not collapse audible bass stereo.
+      sideHpfHz: 5,
+      sideHpfQ: Math.SQRT1_2, // Conventional Q; converted to Web Audio dB at the node boundary.
+      sideDelaySeconds: 0, // Preserve inter-channel phase; no side-only delay.
       sidePresenceHz: 6000,
       sidePresenceQ: 0.55,
-      sideGainDb: 3.0 * t,
+      sideGainDb: 1.0 * t,
       restorationCutoffHz: cutoffKhz * 1000,
       restorationWet: 0.25 * t,
       restorationDrive: 1 + 0.35 * t,
@@ -49,18 +52,20 @@
   }
 
   function bandAverageDb(freqData, sampleRate, lowHz, highHz) {
-    if (!freqData || !freqData.length || !Number.isFinite(sampleRate) || sampleRate <= 0) return -120;
+    if (!freqData || !freqData.length || !Number.isFinite(sampleRate) || sampleRate <= 0 ||
+        !Number.isFinite(lowHz) || !Number.isFinite(highHz) || highHz <= lowHz) return -120;
     const binHz = (sampleRate / 2) / freqData.length;
-    const lo = Math.max(0, Math.floor(lowHz / binHz));
-    const hi = Math.min(freqData.length - 1, Math.ceil(highHz / binHz));
+    const lo = Math.max(0, Math.ceil(lowHz / binHz));
+    const hi = Math.min(freqData.length - 1, Math.ceil(highHz / binHz) - 1);
     if (hi < lo) return -120;
     let power = 0, count = 0;
     for (let i = lo; i <= hi; i++) {
       const db = Number(freqData[i]);
-      if (!Number.isFinite(db)) continue;
-      power += Math.pow(10, db / 10); count++;
+      // -Infinity is a valid silent FFT bin and must remain in the divisor.
+      if (db !== -Infinity && !Number.isFinite(db)) return -120;
+      power += db === -Infinity ? 0 : Math.pow(10, db / 10); count++;
     }
-    return count ? 10 * Math.log10(Math.max(1e-12, power / count)) : -120;
+    return count && Number.isFinite(power) ? 10 * Math.log10(Math.max(1e-12, power / count)) : -120;
   }
 
   function spectrumBands(freqData, sampleRate) {

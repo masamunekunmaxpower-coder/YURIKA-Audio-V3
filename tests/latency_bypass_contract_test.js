@@ -1,0 +1,13 @@
+"use strict";
+const assert = require("assert");
+const fs = require("fs");
+const path = require("path");
+const off = fs.readFileSync(path.join(__dirname,"..","offscreen.js"),"utf8");
+assert(off.includes("const compressorBypass = ctx.createGain()"));
+assert(off.includes("compressor.connect(compressorProcessed)"));
+assert(off.includes("compressorProcessed.connect(compressorSum)"));
+assert(off.includes("compressorBypass.connect(compressorSum)"));
+assert(off.includes("const compressorEnabled = Boolean(next.compressor)"));
+assert(off.includes("compressorEnabled ? 0 : 1"));
+assert(off.includes("compressorEnabled ? 1 : 0"));
+console.log("PASS latency_bypass_contract_test true bypass for disabled broad compressor");

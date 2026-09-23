@@ -9,7 +9,7 @@ const extreme = core.sanitizeSettings({
   enabled:1,preset:"x".repeat(100),lowCutHz:-999,bassDb:999,warmthDb:-999,clarityDb:"3.5",airDb:NaN,
   outputDb:Infinity,compressor:false,detail:999,width:-2,reality:150,noiseReduction:-4,spectralFill:500,hiResMode:1,dapMode:"evil",dapStrength:999,selfDapEnabled:1,selfDapStrength:999,selfDapRestoration:"evil",selfDapRestorationCutoffKhz:999,perspectiveEnabled:1,perspectiveDepth:999
 });
-assert.equal(extreme.enabled,true); assert.equal(extreme.preset.length,24); assert.equal(extreme.lowCutHz,20);
+assert.equal(extreme.enabled,true); assert.equal(extreme.preset.length,24); assert.equal(extreme.lowCutHz,5);
 assert.equal(extreme.bassDb,6); assert.equal(extreme.warmthDb,-6); assert.equal(extreme.clarityDb,3.5);
 assert.equal(extreme.airDb,core.DEFAULTS.airDb); assert.equal(extreme.outputDb,core.DEFAULTS.outputDb);
 assert.equal(extreme.compressor,false); assert.equal(extreme.detail,100); assert.equal(extreme.width,0);
@@ -51,7 +51,7 @@ for (const [name,preset] of Object.entries(core.PRESETS)) {
   assert(s.detail>=0&&s.detail<=100,name); assert(s.width>=0&&s.width<=100,name);
   assert(s.outputDb>=-12&&s.outputDb<=6,name); assert(core.DAP_MODES.includes(s.dapMode),name); assert(s.dapStrength>=0&&s.dapStrength<=100,name); assert(s.selfDapStrength>=0&&s.selfDapStrength<=100,name);
 }
-const sp=selfDap.profile(100); assert.equal(sp.sideHpfHz,100); assert(Math.abs(sp.sideDelaySeconds-0.0002)<1e-9); assert(sp.sideGainDb<=3.0); assert(sp.restorationWet<=0.25);
+const sp=selfDap.profile(100); assert.equal(sp.sideHpfHz,5); assert.equal(sp.sideDelaySeconds,0); assert.equal(sp.sideGainDb,1.0); assert(Math.abs(sp.sideHpfQ-Math.SQRT1_2)<1e-12); assert(sp.restorationWet<=0.25);
 assert.equal(selfDap.restorationDecision("off",{}).active,false); assert.equal(selfDap.restorationDecision("on",{}).active,true);
 const need=selfDap.restorationDecision("auto",{b12_14:-35,b14_16:-38,b16_18:-45,b18_20:-53,overall:-25}); assert.equal(need.active,true);
 const intact=selfDap.restorationDecision("auto",{b12_14:-35,b14_16:-37,b16_18:-39,b18_20:-41,overall:-25}); assert.equal(intact.active,false);

@@ -64,7 +64,7 @@ ok('gain_diagnostics',all(x in html for x in ['diagAutoLevel','diagSparkGain','d
 ok('impact_ui',all(x in html for x in ['impactEnabled','impactAmount','Impact Liberation']))
 ok('impact_core',all(x in core for x in ['impactEnabled','impactAmount']) and 'SETTINGS_SCHEMA_VERSION = 13' in core)
 ok('impact_parallel_lane',all(x in off for x in ['impactHighpass','impactLowpass','impactGain']) and 'headphoneCorrection.output.connect(impactHighpass)' in off and 'impactGain.connect(output)' in off)
-ok('impact_not_serial','compressor.connect(output)' in off and 'impactGain.connect(output)' in off and 'output.connect(transientValley)' in off and 'transientValley.connect(autoLevel)' in off)
+ok('impact_not_serial','compressor.connect(compressorProcessed)' in off and 'compressorProcessed.connect(compressorSum)' in off and 'compressorBypass.connect(compressorSum)' in off and 'compressorSum.connect(output)' in off and 'impactGain.connect(output)' in off and 'output.connect(transientValley)' in off and 'transientValley.connect(autoLevel)' in off)
 ok('impact_band_limited','"highpass", 1400' in off and '"lowpass", 9000' in off)
 ok('impact_safety_pressure','compressorEscape' in (root/'scene-engine.js').read_text(encoding='utf-8') and 'impactGain' in (root/'scene-engine.js').read_text(encoding='utf-8'))
 ok('impact_diagnostics',all(x in html for x in ['diagImpact','diagCompEscape']) and all(x in popup for x in ['impactGain','compressorEscape']))
@@ -111,3 +111,10 @@ ok('v3_guide_popup_button', 'openV3Guide' in popup and 'v3-guide.html' in popupj
 failed=[n for n,p in checks if not p]
 for n,p in checks:print(('PASS' if p else 'FAIL'),n)
 print(f'TOTAL {len(checks)} / PASS {len(checks)-len(failed)} / FAIL {len(failed)}');sys.exit(1 if failed else 0)
+
+ok('compressor_true_bypass','compressorBypass' in off and 'compressorProcessed' in off and 'compressorEnabled' in off)
+ok('self_dap_analyser_live_sink','analyser.connect(analyserSink)' in off and 'analyserSink.connect(ctx.destination)' in off)
+ok('flat_lowcut_true_bypass','flat: Object.freeze({ lowCutHz:5' in dsp and 'applyLowCutRouting' in off and 'lowCutBypass' in off and 'lowCutProcessed' in off)
+
+ok('webaudio_q_semantics','webAudioResonanceDb' in dsp and 'webAudioResonanceDb(q)' in off)
+ok('selfdap_internal_limiter_bypassed','abSum.connect(processedGain)' in off and 'abSum.connect(selfLimiter)' not in off)

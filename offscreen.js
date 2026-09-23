@@ -3,7 +3,8 @@
 const {
   DEFAULTS, sanitizeSettings, dbToGain, computeEffectiveOutputDb,
   widthToMatrix, spectralFillGains, detailMixGain, realityMixGains,
-  makeSoftSaturationCurve, dapProfile, perspectiveProfile, classifyStereo
+  makeSoftSaturationCurve, dapProfile, perspectiveProfile, classifyStereo,
+  webAudioResonanceDb
 } = globalThis.YurikaAudioCore;
 const SelfDAP = globalThis.YurikaSelfDap;
 const Modular = globalThis.YurikaModularCore;
@@ -48,7 +49,10 @@ function freshState(previousSettings = DEFAULTS, previousRevision = 0) {
 
 function createFilter(ctx, type, frequency, gain = 0, q = 0.7) {
   const node = ctx.createBiquadFilter();
-  node.type = type; node.frequency.value = frequency; node.gain.value = gain; node.Q.value = q;
+  node.type = type;
+  node.frequency.value = frequency;
+  node.gain.value = gain;
+  node.Q.value = (type === "lowpass" || type === "highpass") ? webAudioResonanceDb(q) : q;
   return node;
 }
 
@@ -56,6 +60,17 @@ function smooth(param, value, now, seconds = 0.05) {
   param.cancelScheduledValues(now);
   param.setValueAtTime(param.value, now);
   param.linearRampToValueAtTime(value, now + seconds);
+}
+
+function applyLowCutRouting(nodes, frequency, ctx, seconds = 0.05) {
+  const hz = Math.max(5, Number(frequency) || 5);
+  smooth(nodes.lowCut.frequency, hz, ctx.currentTime, seconds);
+  if (!nodes.lowCutBypass || !nodes.lowCutProcessed) return;
+  // 5 Hz is YURIKA's explicit transparent/off sentinel. A true bypass avoids
+  // residual phase rotation in Flat/Neutral while all audible low-cut presets remain filtered.
+  const enabled = hz > 5.0001;
+  smooth(nodes.lowCutBypass.gain, enabled ? 0 : 1, ctx.currentTime, seconds);
+  smooth(nodes.lowCutProcessed.gain, enabled ? 1 : 0, ctx.currentTime, seconds);
 }
 
 function createEarlyReflectionBuffer(ctx) {
@@ -337,7 +352,7 @@ function applyHrtfAndHeadphone(next, initial=false){
   if(!h.mono){ const d=1/(1+hp.crossfeed); smooth(h.directL.gain,d,ctx.currentTime,initial?0.08:0.12); smooth(h.directR.gain,d,ctx.currentTime,initial?0.08:0.12); smooth(h.crossL.gain,hp.crossfeed*d,ctx.currentTime,0.12); smooth(h.crossR.gain,hp.crossfeed*d,ctx.currentTime,0.12); smooth(h.delayL.delayTime,hp.delaySeconds,ctx.currentTime,0.12); smooth(h.delayR.delayTime,hp.delaySeconds,ctx.currentTime,0.12); smooth(h.lpL.frequency,Math.min(hp.lowpassHz,ctx.sampleRate*0.44),ctx.currentTime,0.12); smooth(h.lpR.frequency,Math.min(hp.lowpassHz,ctx.sampleRate*0.44),ctx.currentTime,0.12); smooth(h.pinna.gain,hp.pinnaDb,ctx.currentTime,0.12); smooth(h.air.gain,hp.airDb,ctx.currentTime,0.12); }
   const profile=HeadphoneProfiles.getProfile(next.headphoneModel); const strength=next.headphoneCorrectionEnabled&&headphoneMode?Math.max(0,Math.min(1,next.headphoneCorrectionStrength/100)):0;
   smooth(c.pre.gain,dbToGain(profile.preampDb*strength),ctx.currentTime,initial?0.08:0.18);
-  for(let i=0;i<c.filters.length;i++){ const f=c.filters[i],spec=profile.filters[i]||{type:"peaking",frequency:1000,gain:0,q:0.7}; f.type=spec.type; smooth(f.frequency,Math.min(spec.frequency,ctx.sampleRate*0.44),ctx.currentTime,0.15); smooth(f.Q,spec.q,ctx.currentTime,0.15); smooth(f.gain,(spec.gain||0)*strength,ctx.currentTime,0.18); }
+  for(let i=0;i<c.filters.length;i++){ const f=c.filters[i],spec=profile.filters[i]||{type:"peaking",frequency:1000,gain:0,q:0.7}; f.type=spec.type; smooth(f.frequency,Math.min(spec.frequency,ctx.sampleRate*0.44),ctx.currentTime,0.15); const q=(spec.type==="lowpass"||spec.type==="highpass")?webAudioResonanceDb(spec.q):spec.q; smooth(f.Q,q,ctx.currentTime,0.15); smooth(f.gain,(spec.gain||0)*strength,ctx.currentTime,0.18); }
   const calEnabled=Boolean(next.headphoneCalibrationEnabled&&headphoneMode&&AdaptiveV29); const calStrength=calEnabled?Math.max(0,Math.min(1,next.headphoneCalibrationStrength/100)):0;
   const cal=AdaptiveV29?.safeCalibrationArray(next.headphoneCalibrationGainsDb)||Array(8).fill(0); const preDb=calEnabled?AdaptiveV29.calibrationPrecutDb(cal,next.headphoneCalibrationStrength):0;
   if(c.calPre)smooth(c.calPre.gain,dbToGain(preDb),ctx.currentTime,initial?0.08:0.18);
@@ -675,7 +690,7 @@ function applySceneControls(c) {
   const effectiveDetail = blend(state.settings.detail, c.detail);
   const effectiveReality = blend(state.settings.reality, c.reality);
 
-  smooth(nodes.lowCut.frequency, blend(state.settings.lowCutHz, c.lowCutHz), ctx.currentTime, 0.18);
+  applyLowCutRouting(nodes, blend(state.settings.lowCutHz, c.lowCutHz), ctx, 0.18);
   smooth(nodes.bass.gain, blend(state.settings.bassDb, c.bassDb), ctx.currentTime, 0.22);
   smooth(nodes.warmth.gain, blend(state.settings.warmthDb, c.warmthDb), ctx.currentTime, 0.22);
   smooth(nodes.air.gain, blend(state.settings.airDb, c.airDb), ctx.currentTime, 0.22);
@@ -888,8 +903,8 @@ function createSelfDapMsStage(ctx, input, inputChannels) {
   input.connect(splitter);
   splitter.connect(lMid, 0); splitter.connect(lSide, 0); splitter.connect(rMid, 1); splitter.connect(rSide, 1);
   lMid.connect(midBus); rMid.connect(midBus); lSide.connect(sideBus); rSide.connect(sideBus);
-  const sideHpf = createFilter(ctx, "highpass", 100, 0, 0.7);
-  const sideDelay = ctx.createDelay(0.005); sideDelay.delayTime.value = 0.0002;
+  const sideHpf = createFilter(ctx, "highpass", 5, 0, Math.SQRT1_2);
+  const sideDelay = ctx.createDelay(0.005); sideDelay.delayTime.value = 0;
   const sidePresence = createFilter(ctx, "peaking", 6000, 0, 0.55);
   sideBus.connect(sideHpf); sideHpf.connect(sideDelay); sideDelay.connect(sidePresence);
   const merger = ctx.createChannelMerger(2);
@@ -931,11 +946,15 @@ function createSelfDapStage(ctx, input, inputChannels) {
   bufferSum.connect(abDirect); abDirect.connect(abSum);
   bufferSum.connect(abShaper); abShaper.connect(abGain); abGain.connect(abSum);
 
+  // Keep the legacy node for status/backward compatibility, but do not place it in
+  // the audible path. The downstream final limiter is stricter (-1 dB vs -0.5 dB)
+  // and already provides safety; the extra compressor only added fixed look-ahead latency.
   const selfLimiter = ctx.createDynamicsCompressor();
-  abSum.connect(selfLimiter); selfLimiter.connect(processedGain); processedGain.connect(outputSum);
+  abSum.connect(processedGain); processedGain.connect(outputSum);
   const analyser = ctx.createAnalyser(); analyser.fftSize = 2048; analyser.smoothingTimeConstant = 0.72;
-  pre.connect(analyser);
-  return { output:outputSum, stage:{ ms:ms.stage, bypassGain,processedGain,outputSum,pre,direct,restorationHp,restorationShaper,restorationGain,restorationSum,bufferDirect,bufferShaper,bufferGain,bufferSum,abDirect,abShaper,abGain,abSum,selfLimiter,analyser } };
+  const analyserSink = ctx.createGain(); analyserSink.gain.value = 0;
+  pre.connect(analyser); analyser.connect(analyserSink); analyserSink.connect(ctx.destination);
+  return { output:outputSum, stage:{ ms:ms.stage, bypassGain,processedGain,outputSum,pre,direct,restorationHp,restorationShaper,restorationGain,restorationSum,bufferDirect,bufferShaper,bufferGain,bufferSum,abDirect,abShaper,abGain,abSum,selfLimiter,analyser,analyserSink } };
 }
 
 function stopSelfDapMonitor({ resetDecision = true } = {}) {
@@ -950,7 +969,7 @@ function stopSelfDapMonitor({ resetDecision = true } = {}) {
 
 function updateSelfDapRestoration() {
   const ctx = state.context, stage = state.nodes?.selfDap;
-  if (!ctx || !stage || !SelfDAP || !state.settings.selfDapEnabled) return;
+  if (!ctx || !stage || !SelfDAP || !state.settings.selfDapEnabled || state.settings.selfDapStrength <= 0) return;
   const tickMs = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
   if (state.selfDapLastMonitorAtMs && tickMs - state.selfDapLastMonitorAtMs > 750) {
     state.selfDapLastMonitorAtMs = tickMs; state.selfDapWatchdogTrips += 1;
@@ -997,7 +1016,7 @@ function updateSelfDapRestoration() {
 }
 
 function startSelfDapMonitor() {
-  if (!state.settings.selfDapEnabled || !state.nodes?.selfDap) return;
+  if (!state.settings.selfDapEnabled || state.settings.selfDapStrength <= 0 || !state.nodes?.selfDap) return;
   updateSelfDapRestoration();
   if (!state.selfDapMonitorTimer) state.selfDapMonitorTimer = setInterval(updateSelfDapRestoration, 125);
 }
@@ -1018,7 +1037,7 @@ function applySettings(raw, { initial = false, revision = 0, replace = false } =
   if (!ctx || !nodes) return { restartRequired, stale:false, applied:true, revision:state.lastSettingsRevision };
   const now = ctx.currentTime;
 
-  smooth(nodes.lowCut.frequency, next.lowCutHz, now);
+  applyLowCutRouting(nodes, next.lowCutHz, ctx, initial ? 0.02 : 0.05);
   smooth(nodes.bass.gain, next.bassDb, now);
   smooth(nodes.warmth.gain, next.warmthDb, now);
   smooth(nodes.clarity.gain, next.clarityDb, now);
@@ -1055,12 +1074,13 @@ function applySettings(raw, { initial = false, revision = 0, replace = false } =
 
   if (nodes.selfDap && SelfDAP) {
     const sp = SelfDAP.profile(next.selfDapStrength, next.selfDapRestorationCutoffKhz);
-    const enabled = Boolean(next.selfDapEnabled);
+    const enabled = Boolean(next.selfDapEnabled) && next.selfDapStrength > 0;
     smooth(nodes.selfDap.bypassGain.gain, enabled ? 0 : 1, now, initial ? 0.06 : 0.04);
-    smooth(nodes.selfDap.processedGain.gain, enabled ? 1 : 0, now, initial ? 0.08 : 0.06);
+    smooth(nodes.selfDap.processedGain.gain, enabled ? 1 : 0, now, initial ? 0.06 : 0.04);
     smooth(nodes.selfDap.pre.gain, dbToGain(enabled ? sp.preGainDb : 0), now, 0.10);
     if (nodes.selfDap.ms) {
       smooth(nodes.selfDap.ms.sideHpf.frequency, sp.sideHpfHz, now, 0.10);
+      smooth(nodes.selfDap.ms.sideHpf.Q, webAudioResonanceDb(sp.sideHpfQ), now, 0.10);
       smooth(nodes.selfDap.ms.sideDelay.delayTime, enabled ? sp.sideDelaySeconds : 0, now, 0.10);
       smooth(nodes.selfDap.ms.sidePresence.frequency, sp.sidePresenceHz, now, 0.10);
       smooth(nodes.selfDap.ms.sidePresence.Q, sp.sidePresenceQ, now, 0.10);
@@ -1122,8 +1142,8 @@ function applySettings(raw, { initial = false, revision = 0, replace = false } =
   AudioModules.applyRoomStage(nodes.room, next, ctx);
   AudioModules.applyIntegrityStage(nodes.integrity, next, ctx);
   applyHrtfAndHeadphone(next, initial);
-  if(ctx && next.headphoneOutputDeviceId && next.headphoneOutputDeviceId!==previous.headphoneOutputDeviceId && typeof ctx.setSinkId==="function"){
-    Promise.resolve(ctx.setSinkId(next.headphoneOutputDeviceId)).then(()=>{state.headphoneOutputSinkApplied=true;state.headphoneOutputSinkError=null;}).catch((e)=>{state.headphoneOutputSinkApplied=false;state.headphoneOutputSinkError=e?.message||String(e);});
+  if(ctx && next.headphoneOutputDeviceId!==previous.headphoneOutputDeviceId && typeof ctx.setSinkId==="function"){
+    Promise.resolve().then(()=>ctx.setSinkId(next.headphoneOutputDeviceId || "")).then(()=>{state.headphoneOutputSinkApplied=true;state.headphoneOutputSinkError=null;}).catch((e)=>{state.headphoneOutputSinkApplied=false;state.headphoneOutputSinkError=e?.message||String(e);});
   }
   if (!next.reflectionCharacterEnabled) resetReflectionCharacter(0.08); else applyReflectionCharacter({pulse:state.sparkPulse,speechRatio:state.seamSpeechRatio});
   applyAvSync();
@@ -1151,6 +1171,11 @@ function applySettings(raw, { initial = false, revision = 0, replace = false } =
   }
 
   const comp = compressorBaseProfile(next);
+  const compressorEnabled = Boolean(next.compressor);
+  if (nodes.compressorBypass && nodes.compressorProcessed) {
+    smooth(nodes.compressorBypass.gain, compressorEnabled ? 0 : 1, now, initial ? 0.02 : 0.03);
+    smooth(nodes.compressorProcessed.gain, compressorEnabled ? 1 : 0, now, initial ? 0.02 : 0.03);
+  }
   smooth(nodes.compressor.threshold, comp.threshold, now);
   smooth(nodes.compressor.knee, comp.knee, now);
   smooth(nodes.compressor.ratio, comp.ratio, now);
@@ -1198,7 +1223,7 @@ async function start({ tabId, streamId, settings, revision = 0, deck = "A", medi
   if (Number.isFinite(Number(revision)) && Number(revision) > 0) state.lastSettingsRevision = Math.max(state.lastSettingsRevision, Number(revision));
   state.requestedHiRes = state.settings.hiResMode;
 
-  let acquiredStream = null;
+  let acquiredStream = null, acquiredContext = null;
   try {
     const stream = acquiredStream = mediaStream || await navigator.mediaDevices.getUserMedia({
       audio: { mandatory: { chromeMediaSource: "tab", chromeMediaSourceId: streamId } },
@@ -1206,7 +1231,7 @@ async function start({ tabId, streamId, settings, revision = 0, deck = "A", medi
     });
     const audioTrack = stream.getAudioTracks()[0];
     const channelCount = Number(audioTrack?.getSettings?.().channelCount) || 2;
-    const ctx = await createContext(state.settings);
+    const ctx = acquiredContext = await createContext(state.settings);
     if (ctx.state !== "running") await ctx.resume();
 
     const source = ctx.createMediaStreamSource(stream);
@@ -1222,6 +1247,9 @@ async function start({ tabId, streamId, settings, revision = 0, deck = "A", medi
     const cartridge = AudioModules.createCartridgeStage(ctx, inputBus);
     const noise = await createNoiseNode(ctx);
     const lowCut = createFilter(ctx, "highpass", 35, 0, 0.7);
+    const lowCutBypass = ctx.createGain(); lowCutBypass.gain.value = 1;
+    const lowCutProcessed = ctx.createGain(); lowCutProcessed.gain.value = 0;
+    const lowCutSum = ctx.createGain();
     const bass = createFilter(ctx, "lowshelf", 95);
     const warmth = createFilter(ctx, "peaking", 280, 0, 0.8);
     const clarity = createFilter(ctx, "peaking", 2600, 0, 0.9);
@@ -1249,7 +1277,9 @@ async function start({ tabId, streamId, settings, revision = 0, deck = "A", medi
     const realityReflectionGain = ctx.createGain(); realityReflectionGain.gain.value = 0;
 
     cartridge.output.connect(noise.node);
-    noise.node.connect(lowCut); lowCut.connect(bass); bass.connect(warmth); warmth.connect(clarity); clarity.connect(air);
+    noise.node.connect(lowCutBypass); lowCutBypass.connect(lowCutSum);
+    noise.node.connect(lowCut); lowCut.connect(lowCutProcessed); lowCutProcessed.connect(lowCutSum);
+    lowCutSum.connect(bass); bass.connect(warmth); warmth.connect(clarity); clarity.connect(air);
     air.connect(fillBody); fillBody.connect(fillPresence); fillPresence.connect(fillTop);
     fillTop.connect(mixBus);
     fillTop.connect(detailHighpass); detailHighpass.connect(detailShaper); detailShaper.connect(detailGain); detailGain.connect(mixBus);
@@ -1285,6 +1315,9 @@ async function start({ tabId, streamId, settings, revision = 0, deck = "A", medi
     const reflectionCharacter = createReflectionCharacterStage(ctx, headphoneCorrection.output);
 
     const compressor = ctx.createDynamicsCompressor();
+    const compressorBypass = ctx.createGain(); compressorBypass.gain.value = 1;
+    const compressorProcessed = ctx.createGain(); compressorProcessed.gain.value = 0;
+    const compressorSum = ctx.createGain();
     // Impact Liberation: monitor-controlled parallel transient lane. It bypasses only the broad compressor,
     // stays out of the audible path at gain=0, and rejoins before Output/AutoLevel/Safety/Limiter.
     const impactHighpass = createFilter(ctx, "highpass", 1400, 0, 0.68);
@@ -1301,7 +1334,9 @@ async function start({ tabId, streamId, settings, revision = 0, deck = "A", medi
     const limiter = ctx.createDynamicsCompressor();
     const safetyMeter = await createSafetyMeterNode(ctx);
     const masterSafety = ctx.createGain(); masterSafety.gain.value = 0;
-    headphoneCorrection.output.connect(compressor); compressor.connect(output);
+    headphoneCorrection.output.connect(compressorBypass); compressorBypass.connect(compressorSum);
+    headphoneCorrection.output.connect(compressor); compressor.connect(compressorProcessed); compressorProcessed.connect(compressorSum);
+    compressorSum.connect(output);
     headphoneCorrection.output.connect(impactHighpass); impactHighpass.connect(impactLowpass); impactLowpass.connect(impactGain); impactGain.connect(output);
     headphoneCorrection.output.connect(edgeAccentBand); edgeAccentBand.connect(edgeAccentShaper); edgeAccentShaper.connect(edgeAccentGain); edgeAccentGain.connect(output);
     reflectionCharacter.output.connect(output);
@@ -1310,11 +1345,11 @@ async function start({ tabId, streamId, settings, revision = 0, deck = "A", medi
 
     state.tabId = tabId; state.stream = stream; state.context = ctx; state.source = source; state.inputMode = inputMode; state.externalActive = inputMode === "external";
     state.nodes = {
-      inputBus, cartridge: cartridge.stage, noiseNode: noise.node, lowCut, bass, warmth, clarity, air, fillBody, fillPresence, fillTop,
+      inputBus, cartridge: cartridge.stage, noiseNode: noise.node, lowCut, lowCutBypass, lowCutProcessed, lowCutSum, bass, warmth, clarity, air, fillBody, fillPresence, fillTop,
       detailHighpass, detailShaper, detailGain, realityShaper, realityHarmGain, convolver,
       realityReflectionGain, mixBus, voiceMaterial: voiceMaterial.stage, selfDap: selfDap.stage, widthMatrix: width.matrix, perspective: perspective.stage,
       dacMatrix: dacMatrix.stage, dapPre, dapLow, dapHigh, dapDirect, dapShaper, dapHarmGain, dapSum, dapCrossfeed: dapCross.matrix,
-      room: room.stage, integrity: integrity.stage, hrtf: hrtf.stage, headphoneCorrection: headphoneCorrection.stage, reflectionCharacter:reflectionCharacter.stage, compressor, impactHighpass, impactLowpass, impactGain, edgeAccentBand, edgeAccentShaper, edgeAccentGain, output, transientValley, sharedAnalyser, sparkMonitor: sparkMonitor.node, spatialMetrics:spatialMetrics.node, sceneSink, autoLevel, adaptiveTrim, limiter, safetyMeter: safetyMeter.node, masterSafety, avSync:avSync.stage
+      room: room.stage, integrity: integrity.stage, hrtf: hrtf.stage, headphoneCorrection: headphoneCorrection.stage, reflectionCharacter:reflectionCharacter.stage, compressor, compressorBypass, compressorProcessed, compressorSum, impactHighpass, impactLowpass, impactGain, edgeAccentBand, edgeAccentShaper, edgeAccentGain, output, transientValley, sharedAnalyser, sparkMonitor: sparkMonitor.node, spatialMetrics:spatialMetrics.node, sceneSink, autoLevel, adaptiveTrim, limiter, safetyMeter: safetyMeter.node, masterSafety, avSync:avSync.stage
     };
     state.noiseWorkletAvailable = noise.available;
     state.safetyMeterAvailable = safetyMeter.available;
@@ -1334,8 +1369,10 @@ async function start({ tabId, streamId, settings, revision = 0, deck = "A", medi
         if (state.replacingDecks?.[safeDeck] || state.streams?.[safeDeck] !== stream) return;
         void stopDeck(safeDeck).then((st) => { if (!st?.active) chrome.runtime.sendMessage({ target:"service-worker", type:"OFFSCREEN_ENDED" }).catch(()=>{}); });
       } else if (inputMode === "tab") {
+        if (state.tabSessions?.[String(tabId)]?.stream !== stream) return;
         void stopSession(tabId).then((st)=>{ if(!st?.active) chrome.runtime.sendMessage({target:"service-worker",type:"OFFSCREEN_ENDED"}).catch(()=>{}); });
       } else {
+        if (state.stream !== stream) return;
         void stop();
         chrome.runtime.sendMessage({ target: "service-worker", type: "OFFSCREEN_ENDED" }).catch(() => {});
       }
@@ -1345,6 +1382,7 @@ async function start({ tabId, streamId, settings, revision = 0, deck = "A", medi
   } catch (error) {
     const message = error?.message || String(error);
     await stop();
+    if (acquiredContext && acquiredContext.state !== "closed") { try { await acquiredContext.close(); } catch {} }
     if (acquiredStream) for (const track of acquiredStream.getTracks?.() || []) { try { track.stop(); } catch {} }
     state.error = message;
     return { ok: false, error: message || "audio start failed" };
@@ -1458,6 +1496,8 @@ function status() {
     selfDapBands: state.selfDapBands,
     selfDapBypassGain: state.nodes?.selfDap?.bypassGain ? Number(state.nodes.selfDap.bypassGain.gain.value.toFixed(3)) : null,
     selfDapProcessedGain: state.nodes?.selfDap?.processedGain ? Number(state.nodes.selfDap.processedGain.gain.value.toFixed(3)) : null,
+    selfDapInternalLimiterBypassed: true,
+    lowCutBypassed: Boolean(state.nodes?.lowCutBypass && state.nodes.lowCutBypass.gain.value > 0.5),
     perspectiveEnabled: Boolean(state.settings.perspectiveEnabled),
     perspectiveDepth: state.settings.perspectiveDepth,
     perspectiveWet: state.nodes?.perspective?.wet ? Number(state.nodes.perspective.wet.gain.value.toFixed(4)) : null,

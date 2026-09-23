@@ -4,7 +4,7 @@
   const C = globalThis.YurikaAudioCore;
   if (!M || !C) throw new Error("YURIKA modular/audio core missing");
 
-  const filter = (ctx,type,freq,gain=0,q=0.707) => { const n=ctx.createBiquadFilter(); n.type=type; n.frequency.value=freq; n.gain.value=gain; n.Q.value=q; return n; };
+  const filter = (ctx,type,freq,gain=0,q=0.707) => { const n=ctx.createBiquadFilter(); n.type=type; n.frequency.value=freq; n.gain.value=gain; n.Q.value=(type==="lowpass"||type==="highpass")?C.webAudioResonanceDb(q):q; return n; };
   const smooth = (param,value,now,seconds=0.08) => { param.cancelScheduledValues(now); param.setValueAtTime(param.value,now); param.linearRampToValueAtTime(value,now+seconds); };
 
   function createDacMatrixStage(ctx,input) {
@@ -22,7 +22,7 @@
     smooth(stage.bypass.gain,enabled?0:1,now,0.08); smooth(stage.processed.gain,enabled?1:0,now,0.08);
     smooth(stage.pre.gain,C.dbToGain(p.preDb),now,0.12); smooth(stage.low.gain,p.lowDb,now,0.14); smooth(stage.presence.gain,p.presenceDb,now,0.14); smooth(stage.high.gain,p.highDb,now,0.14);
     smooth(stage.direct.gain,Math.max(0.90,1-p.harmonic),now,0.12); smooth(stage.harm.gain,p.harmonic,now,0.12);
-    smooth(stage.lowpass.frequency,Math.min(p.cutoffHz,ctx.sampleRate*0.47),now,0.18); stage.lowpass.Q.value=p.q;
+    smooth(stage.lowpass.frequency,Math.min(p.cutoffHz,ctx.sampleRate*0.47),now,0.18); stage.lowpass.Q.value=C.webAudioResonanceDb(p.q);
     if (initial || stage._mode!==p.mode || Math.abs((stage._strength??-1)-p.strength)>1e-6) { stage.shaper.curve=C.makeSoftSaturationCurve(4096,p.drive); stage.shaper.oversample=settings.hiResMode?"4x":"2x"; stage._mode=p.mode; stage._strength=p.strength; }
   }
 

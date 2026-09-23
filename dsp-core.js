@@ -139,7 +139,7 @@
   // Normal presets affect only the tone/engine layer. Virtual DAP and Self DAP are independent layers.
   // `selfdap` is the only explicit system preset and may configure all three layers when selected directly.
   const PRESETS = Object.freeze({
-    flat: Object.freeze({ lowCutHz:20,bassDb:0,warmthDb:0,clarityDb:0,airDb:0,outputDb:0,compressor:false,detail:0,width:0,reality:0,noiseReduction:0,spectralFill:0,hiResMode:false }),
+    flat: Object.freeze({ lowCutHz:5,bassDb:0,warmthDb:0,clarityDb:0,airDb:0,outputDb:0,compressor:false,detail:0,width:0,reality:0,noiseReduction:0,spectralFill:0,hiResMode:false }),
     clean: Object.freeze({ lowCutHz:35,bassDb:1.5,warmthDb:-0.5,clarityDb:1.5,airDb:1.0,outputDb:0,compressor:true,detail:25,width:15,reality:10,noiseReduction:15,spectralFill:20,hiResMode:false }),
     music: Object.freeze({ lowCutHz:28,bassDb:2.0,warmthDb:0.5,clarityDb:0.8,airDb:1.5,outputDb:-0.8,compressor:false,detail:35,width:35,reality:25,noiseReduction:10,spectralFill:30,hiResMode:false }),
     voice: Object.freeze({ lowCutHz:70,bassDb:-1,warmthDb:-1.5,clarityDb:3.0,airDb:1.2,outputDb:-0.8,compressor:true,detail:35,width:8,reality:5,noiseReduction:35,spectralFill:15,hiResMode:false }),
@@ -151,6 +151,12 @@
 
   const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
   const dbToGain = (db) => Math.pow(10, db / 20);
+  // Web Audio interprets BiquadFilterNode.Q as resonance in dB for lowpass/highpass,
+  // while the rest of YURIKA's tuning tables use conventional linear Q values.
+  const webAudioResonanceDb = (linearQ) => {
+    const q = Number(linearQ);
+    return 20 * Math.log10(Number.isFinite(q) && q > 0 ? q : Math.SQRT1_2);
+  };
 
   function clampNumber(value, min, max, fallback) {
     const n = Number(value);
@@ -162,7 +168,7 @@
     return {
       enabled: Boolean(raw.enabled),
       preset: typeof raw.preset === "string" ? raw.preset.slice(0, 24) : DEFAULTS.preset,
-      lowCutHz: clampNumber(raw.lowCutHz, 20, 120, DEFAULTS.lowCutHz),
+      lowCutHz: clampNumber(raw.lowCutHz, 5, 120, DEFAULTS.lowCutHz),
       bassDb: clampNumber(raw.bassDb, -6, 6, DEFAULTS.bassDb),
       warmthDb: clampNumber(raw.warmthDb, -6, 6, DEFAULTS.warmthDb),
       clarityDb: clampNumber(raw.clarityDb, -6, 6, DEFAULTS.clarityDb),
@@ -456,6 +462,6 @@
     VIRTUAL_DAP_KEYS, SELF_DAP_KEYS, PERSPECTIVE_KEYS, SAFETY_KEYS, SCENE_KEYS, DAC_MATRIX_KEYS, ROOM_KEYS, INTEGRITY_KEYS, DJ_KEYS, CARTRIDGE_KEYS, SYSTEM_PRESET_NAMES, MANUAL_EDIT_KEYS, clamp, dbToGain, sanitizeSettings,
     sanitizeSettingsPatch, sanitizeManualPatch, migrateStoredSettings, applyPreset, applyManualPatch, diffSettings, computeAutoHeadroomDb,
     computeEffectiveOutputDb, dapProfile, perspectiveProfile, widthToMatrix, spectralFillGains, detailMixGain,
-    realityMixGains, makeSoftSaturationCurve, classifyStereo, isYoutubeUrl
+    realityMixGains, makeSoftSaturationCurve, classifyStereo, webAudioResonanceDb, isYoutubeUrl
   });
 })();
