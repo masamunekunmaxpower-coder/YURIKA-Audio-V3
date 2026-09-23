@@ -1,0 +1,77 @@
+"use strict";
+function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
+function f32ToBase64(arr) {
+  const u8 = new Uint8Array(arr.buffer, arr.byteOffset, arr.byteLength);
+  let text = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < u8.length; i += chunk) text += String.fromCharCode(...u8.subarray(i, i + chunk));
+  return btoa(text);
+}
+function buildQualitySettings(profile) {
+  const C = globalThis.YurikaAudioCore;
+  let s = { ...C.DEFAULTS, enabled:true };
+  if (profile === "neutral") {
+    s = { ...s, ...C.PRESETS.flat,
+      impactEnabled:false, seamNaturalizerEnabled:false, transientValleyEnabled:false, transientEdgeEnabled:false,
+      orbitKeeperEnabled:false, sceneEnabled:false, sparkEnabled:false, voiceMaterialEnabled:false,
+      headphoneCorrectionEnabled:false, headphoneCalibrationEnabled:false, hrtfEnabled:false,
+      reflectionCharacterEnabled:false, perspectiveEnabled:false, multiSpeakerEnabled:false,
+      dacMatrixMode:"off", roomEnabled:false, integrityEnabled:false, autoLevelEnabled:false,
+      dapMode:"off", dapStrength:0, selfDapEnabled:false, adaptiveSafetyEnabled:false, avSyncEnabled:false,
+      cartridgeEnabled:false, djEnabled:false, noiseReduction:0, spectralFill:0, detail:0, width:0, reality:0,
+      outputDb:0, compressor:false, lowCutHz:20, bassDb:0, warmthDb:0, clarityDb:0, airDb:0 };
+  } else if (profile === "clean") s = { ...s, ...C.PRESETS.clean };
+  else if (profile === "music") s = { ...s, ...C.PRESETS.music };
+  else if (profile === "selfdap") s = { ...s, ...C.PRESETS.selfdap };
+  else throw new Error(`unknown profile: ${profile}`);
+  return C.sanitizeSettings(s);
+}
+async function runYurikaQualityTest(inputUrl, profile = "neutral") {
+  const boot = new AudioContext({ sampleRate:48000 });
+  await boot.resume();
+  const dummyDest = boot.createMediaStreamDestination();
+  const zero = boot.createGain(); zero.gain.value = 0;
+  const osc = boot.createOscillator(); osc.frequency.value = 440; osc.connect(zero); zero.connect(dummyDest); osc.start();
+  const settings = buildQualitySettings(profile);
+  const st0 = await globalThis.__YURIKA_TEST_API__.start({
+    tabId:999, streamId:"quality", settings, revision:1, mediaStream:dummyDest.stream, inputMode:"tab"
+  });
+  if (!st0?.ok) throw new Error(st0?.error || "DSP start failed");
+  // Replace once more as a normal runtime update so the long initial width ramp does not contaminate measurement.
+  globalThis.__YURIKA_TEST_API__.applySettings(settings, { initial:false, revision:2, replace:true });
+  await sleep(1500);
+  const state = globalThis.__YURIKA_TEST_API__.getState();
+  const ctx = state.context;
+  await ctx.audioWorklet.addModule(chrome.runtime.getURL("tests/audio_quality/capture-worklet.js"));
+  const cap = new AudioWorkletNode(ctx, "yurika-quality-capture", {
+    numberOfInputs:1, numberOfOutputs:1, outputChannelCount:[2]
+  });
+  const silentSink = ctx.createGain(); silentSink.gain.value = 0;
+  cap.connect(silentSink); silentSink.connect(ctx.destination);
+  state.nodes.avSync.sum.connect(cap);
+  const ab = await (await fetch(inputUrl)).arrayBuffer();
+  const buf = await ctx.decodeAudioData(ab.slice(0));
+  const src = ctx.createBufferSource(); src.buffer = buf; src.connect(state.nodes.inputBus);
+  const pre = 0.30, tail = 0.80;
+  const frames = Math.ceil((pre + buf.duration + tail) * ctx.sampleRate);
+  const done = new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("capture timeout")), Math.ceil((pre + buf.duration + tail + 5) * 1000));
+    cap.port.onmessage = (event) => {
+      if (event.data?.type === "done") { clearTimeout(timer); resolve(event.data); }
+    };
+  });
+  cap.port.postMessage({ type:"start", frames });
+  src.start(ctx.currentTime + pre);
+  const pcm = await done;
+  const status = globalThis.__YURIKA_TEST_API__.status();
+  const result = {
+    sampleRate:ctx.sampleRate, profile, status,
+    left:f32ToBase64(pcm.left), right:f32ToBase64(pcm.right)
+  };
+  await globalThis.__YURIKA_TEST_API__.stop();
+  try { osc.stop(); } catch {}
+  try { await boot.close(); } catch {}
+  globalThis.__QUALITY_RESULT__ = result;
+  return { sampleRate:result.sampleRate, profile, frames:pcm.left.length, status };
+}
+globalThis.runYurikaQualityTest = runYurikaQualityTest;
