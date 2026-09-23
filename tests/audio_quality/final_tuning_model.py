@@ -1,4 +1,4 @@
-"""Deterministic v2.3 -> final-v2.4 linear tuning model.
+"""Deterministic final-v2.5 linear tuning model.
 This is not a browser render. It verifies the intended low-cut/Q and Self-DAP M/S changes.
 """
 from __future__ import annotations
@@ -32,6 +32,8 @@ js="require(process.argv[1]);console.log(JSON.stringify(globalThis.YurikaSelfDap
 profile=json.loads(subprocess.check_output(['node','-e',js,str(ROOT/'self-dap-core.js')],text=True))
 assert profile['sideHpfHz']==5
 assert abs(profile['sideHpfQ']-math.sqrt(.5))<1e-12
+assert abs(profile['bufferHarmonic']-0.0042)<1e-12
+assert abs(profile['abHarmonic']-0.0063)<1e-12
 
 points=np.array([20,40,63,125,250,1000,6000,10000,16000],float)
 old_d,old_c=side_transfer(5+25*.7,.7,96000,points)
@@ -66,6 +68,8 @@ report={
     for h,o,n in zip(cut_points,db(old_hp),db(new_hp))
   ],
   'neutral_flat':'true low-cut bypass at the 5 Hz sentinel; modeled filter phase is therefore removed from the neutral path',
+  'final_limiter_makeup_compensation_db':-0.57,
+  'selfdap_harmonic_polish':'buffer/AB harmonic parallel lanes reduced about 50 percent; high-band restoration retained',
   'latency_topology':{
     'neutral':'one final DynamicsCompressorNode limiter remains',
     'music':'one final DynamicsCompressorNode limiter remains',
@@ -74,4 +78,4 @@ report={
   }
 }
 if len(sys.argv)>1: Path(sys.argv[1]).write_text(json.dumps(report,indent=2),encoding='utf-8')
-print('PASS final_tuning_model: corrected WebAudio Q semantics + neutral true bypass + Self-DAP audible-bass stereo preservation')
+print('PASS final_tuning_model v2.5: limiter unity compensation + corrected Q + Self-DAP lower-distortion polish')

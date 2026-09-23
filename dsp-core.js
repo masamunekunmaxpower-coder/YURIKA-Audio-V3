@@ -393,9 +393,14 @@
     return -Math.min(12, positiveEq * 0.45 + enhancementBudget + dapBudget + selfDapBudget + perspectiveBudget + modularBudget + sceneBudget);
   }
 
+  // The final Web Audio DynamicsCompressorNode limiter measured +0.57 dB of
+  // broadband make-up at unity settings in the synchronized browser harness.
+  // Compensate that fixed stage here so outputDb=0 remains true acoustic unity.
+  const FINAL_LIMITER_MAKEUP_COMPENSATION_DB = -0.57;
+
   function computeEffectiveOutputDb(settings) {
     const s = sanitizeSettings(settings);
-    return clamp(s.outputDb + computeAutoHeadroomDb(s), -24, 6);
+    return clamp(s.outputDb + computeAutoHeadroomDb(s) + FINAL_LIMITER_MAKEUP_COMPENSATION_DB, -24, 6);
   }
 
   function widthToMatrix(widthAmount) {
