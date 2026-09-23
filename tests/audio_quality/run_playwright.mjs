@@ -21,8 +21,8 @@ function writeFloatWav(file, left, right, sampleRate) {
   b.write("WAVE", 8);
   b.write("fmt ", 12);
   b.writeUInt32LE(16, 16);
-  b.writeUInt16LE(3, 20);     // IEEE float
-  b.writeUInt16LE(2, 22);     // stereo
+  b.writeUInt16LE(3, 20); // IEEE float
+  b.writeUInt16LE(2, 22);
   b.writeUInt32LE(sampleRate, 24);
   b.writeUInt32LE(sampleRate * 2 * 4, 28);
   b.writeUInt16LE(8, 32);
@@ -46,9 +46,6 @@ let context = null;
 try {
   console.log("[YURIKA] Launching Playwright Chromium in headless extension mode...");
 
-  // Playwright's current documented extension path:
-  // persistent context + channel:"chromium".
-  // This avoids Xvfb/headed GPU initialization failures on GitHub Actions.
   context = await chromium.launchPersistentContext(userDataDir, {
     channel: "chromium",
     headless: true,
@@ -63,7 +60,7 @@ try {
     ]
   });
 
-  let workers = context.serviceWorkers();
+  const workers = context.serviceWorkers();
   const worker =
     workers[0] ||
     await context.waitForEvent("serviceworker", { timeout: 30_000 });
@@ -72,8 +69,12 @@ try {
   console.log(`[YURIKA] Extension loaded: ${extensionId}`);
 
   const page = await context.newPage();
-  page.on("console", msg => console.log(`[browser:${msg.type()}] ${msg.text()}`));
-  page.on("pageerror", err => console.error("[browser:pageerror]", err));
+  page.on("console", (msg) =>
+    console.log(`[browser:${msg.type()}] ${msg.text()}`)
+  );
+  page.on("pageerror", (err) =>
+    console.error("[browser:pageerror]", err)
+  );
 
   await page.goto(
     `chrome-extension://${extensionId}/tests/audio_quality/runtime.html`,
@@ -103,16 +104,27 @@ try {
       () =>
         globalThis.__QUALITY_RESULT__ &&
         typeof globalThis.__QUALITY_RESULT__.left === "string" &&
-        typeof globalThis.__QUALITY_RESULT__.right === "string",
+        typeof globalThis.__QUALITY_RESULT__.right === "string" &&
+        typeof globalThis.__QUALITY_RESULT__.refLeft === "string" &&
+        typeof globalThis.__QUALITY_RESULT__.refRight === "string",
       null,
       { timeout: 120_000 }
     );
 
-    const result = await page.evaluate(() => globalThis.__QUALITY_RESULT__);
+    const result = await page.evaluate(
+      () => globalThis.__QUALITY_RESULT__
+    );
 
     fs.writeFileSync(
       path.join(outDir, `${profile}.status.json`),
-      JSON.stringify(small.status ?? {}, null, 2)
+      JSON.stringify(
+        {
+          runtime_status: small.status ?? {},
+          capture_meta: small.captureMeta ?? {}
+        },
+        null,
+        2
+      )
     );
 
     writeFloatWav(
@@ -122,8 +134,15 @@ try {
       result.sampleRate
     );
 
+    writeFloatWav(
+      path.join(outDir, `${profile}.reference.wav`),
+      result.refLeft,
+      result.refRight,
+      result.sampleRate
+    );
+
     console.log(
-      `[YURIKA] ${profile}: ${result.sampleRate} Hz, WAV written successfully`
+      `[YURIKA] ${profile}: ${result.sampleRate} Hz, DSP + matched reference written`
     );
   }
 
