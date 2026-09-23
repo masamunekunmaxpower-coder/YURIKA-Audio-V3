@@ -1,0 +1,16 @@
+"use strict";
+const assert=require("assert");
+require("../self-dap-core.js");
+const s=globalThis.YurikaSelfDap;
+assert.deepEqual([...s.RESTORATION_MODES],["off","auto","on"]);
+const p0=s.profile(0), p100=s.profile(100), p9=s.profile(100,9), p18=s.profile(100,18);
+assert.equal(p0.sideGainDb,0); assert.equal(p100.sideHpfHz,100); assert(Math.abs(p100.sideDelaySeconds-0.0002)<1e-12);
+assert.equal(p9.restorationCutoffHz,9000); assert.equal(p18.restorationCutoffHz,18000);
+assert(p100.sideGainDb<=3.0); assert(p100.restorationWet<=0.25); assert(p100.bufferHarmonic<=0.0121); assert(p100.abHarmonic<=0.0181);
+const data=new Float32Array(1024); data.fill(-45);
+const bands=s.spectrumBands(data,48000); for(const v of Object.values(bands)) assert(Number.isFinite(v));
+assert.equal(s.restorationDecision("on",bands).active,true); assert.equal(s.restorationDecision("off",bands).active,false);
+assert.equal(s.restorationDecision("auto",{overall:-20,b14_16:-35,b16_18:-43,b18_20:-52,b12_14:-30}).active,true);
+assert.equal(s.restorationDecision("auto",{overall:-20,b14_16:-35,b16_18:-37,b18_20:-39,b12_14:-34}).active,false);
+assert.equal(s.restorationDecision("auto",{overall:-90,b14_16:-90,b16_18:-100,b18_20:-110,b12_14:-85}).active,false);
+console.log("PASS self_dap_system_test profile + spectrum + auto restoration");
