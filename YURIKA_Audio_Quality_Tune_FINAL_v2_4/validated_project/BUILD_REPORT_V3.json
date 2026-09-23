@@ -1,0 +1,14 @@
+{
+  "version": "3.0.0",
+  "audio_core": "2.9.0",
+  "settings_schema": 13,
+  "integration": {
+    "jiero_guide": "v3-guide.html",
+    "jiero_guide_script": "v3-guide.js",
+    "standalone_guide": "YURIKA_V3_JIERO_INTERACTIVE_GUIDE_STANDALONE.html",
+    "popup_launcher": true,
+    "extension_csp_safe_external_script": true
+  },
+  "audio_core_modified": false,
+  "note": "V3 packages the tested v2.9 audio core with an integrated Jiero interactive guide. Only popup launcher/version/docs/tests were changed around the audio core."
+}

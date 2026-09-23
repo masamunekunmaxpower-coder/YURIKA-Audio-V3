@@ -1,0 +1,42 @@
+{
+  "version": "2.6.0",
+  "name": "SEAM_VALLEY_ORBIT_VALIDATION",
+  "design": {
+    "seam_naturalizer": "bounded post-detection discontinuity smoother; no missing-phoneme generation",
+    "transient_valley": "short post-impact dip; no added peak boost; no look-ahead",
+    "orbit_keeper": "health-score station-keeping supervisor with hysteresis and safe degradation"
+  },
+  "bounds": {
+    "seam_max_clarity_relax_db": 1.35,
+    "valley_max_db": {
+      "headphone": 1.1,
+      "stereo": 1.25,
+      "smartphone": 0.6,
+      "tv": 0.8,
+      "portable": 0.6,
+      "multispeaker": 1.25
+    },
+    "safety_pressure_1_valley_db": 0,
+    "orbit_levels": 4,
+    "orbit_recovery_stable_seconds_approx": 20
+  },
+  "tests": {
+    "js_syntax": "PASS",
+    "js_tests": "28/28 PASS",
+    "static": "110/110 PASS",
+    "dependency_audit": "PASS",
+    "perspective_48_96k": "PASS",
+    "adaptive_fuzz": "100000 PASS"
+  },
+  "jiro": {
+    "score": 85.87,
+    "verdict": "pass_with_limits",
+    "must_constraints": "5/5 PASS"
+  },
+  "unverified": [
+    "real-browser long-run CPU/thermal",
+    "real sound-MAD naturalness/false positives",
+    "v2.6 recorded transient P95/P99",
+    "subjective blind A/B"
+  ]
+}

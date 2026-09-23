@@ -1,0 +1,16 @@
+{
+  "audio-modules.js": "5b20e84d46e804b4e6af84ac15760edd54de3c63d710b066bbc2896d87ba8534",
+  "dsp-core.js": "752b861e244963e2837740518c2d9c434b7131911ee81005262e421131ca9103",
+  "offscreen.js": "db110ae0c538a8934ba80bf82a93ecfffe18bcdbd192b2c868d9425e65bd7f83",
+  "self-dap-core.js": "fed20491b563a5548fcc8257279c3d60eed0e25a9914a67d0bcdb063a0cba4a7",
+  "tests/audio_modules_test.js": "95a2d4b0aeb7ad67ba9173461332d38aafe09b8c1d3ed27f725c4ce25d66da2b",
+  "tests/audio_quality/final_tuning_model.py": "d1f07d1d8f3fbc6ef3d1e37ff6ec652341fdbee8597d54a369d4b5986417bc3b",
+  "tests/audio_quality/selfdap_response_test.py": "43103ebf595a6c8c5c76a6384e1ac8cd6431b6a2b83018bc2941caa7ddb5a8c0",
+  "tests/dsp_logic_test.js": "822194a5661ac4ea32bc1530a357be2416530b1f9eb417f756fe798c45527e35",
+  "tests/final_audio_contract_test.js": "88e3e6f455a2553deed688a951ea60c84cbded42ece95b76ed0598bcfd31faae",
+  "tests/runtime_mock_test.js": "c382a3cd45009801038c72f4ae4d191b71d92082bf73cc61f7d6f4a95b78215f",
+  "tests/self_dap_monitor_contract_test.js": "00e0d4b6c874d7f212a1abb751e747ecf277d30825ed507e39def73d8ee4c5a9",
+  "tests/self_dap_runtime_v22_test.js": "6215050e2c15c2b50d9e74945a2a048bbba1a8e91371dcb58b8d3a49406e5da2",
+  "tests/self_dap_system_test.js": "f715cf81ec5083ea28ddc60c7c15d115532de97fb27978946359549f7e201b49",
+  "tests/static_test.py": "2b0f418e30aa7a96757a57b76228b1f1455efde4160569947ecea976afb3ebb1"
+}

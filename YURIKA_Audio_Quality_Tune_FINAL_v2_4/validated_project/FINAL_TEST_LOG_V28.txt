@@ -1,0 +1,34 @@
+YURIKA Audio v2.8.0 FINAL TEST LOG
+Generated 2026-09-22
+
+[1] JavaScript syntax
+PASS package/test JavaScript syntax
+
+[2] JavaScript tests
+TOTAL JS tests: 35 PASS
+- v2.8 adaptive fuzz 100000 PASS
+- v2.7 adaptive fuzz 100000 PASS
+- v2.6 adaptive fuzz 100000 PASS
+- spatial metrics known ITD/ILD + absolute/signed IACC PASS
+- independent multi-tab session + CPU cap PASS
+- legacy v2.0-v2.7 regression tests PASS
+
+[3] Static audit
+TOTAL 138 / PASS 138 / FAIL 0
+
+[4] Dependency audit
+PASS scripts + settings + message protocol + permission graph
+PASS audio supervisor graph
+
+[5] Perspective simulation
+PASS 48/96 kHz impulse peak + energy + reflection timing bounds
+
+[6] Jiro deterministic final audit
+Yurika Edge Reasoning Core 1.4.0: 90.63 / pass_with_limits / must constraints 6/6 PASS
+
+Important limits:
+- Localization/HRTF scores are signal-cue proxies, not listener ground truth.
+- Reflection Character shapes playback cues; it cannot make physical walls more reflective.
+- hardwareConcurrency sets conservative workload/session tiers; browser/OS own actual JIT/thread/core scheduling.
+- A/V delay can only delay audio. It cannot advance lagging DSP audio.
+- Multi-tab sessions have independent ON/OFF but share global DSP settings in v2.8.

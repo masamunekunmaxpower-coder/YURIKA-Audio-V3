@@ -1,0 +1,14 @@
+"use strict";
+const assert = require("assert");
+const fs = require("fs");
+const path = require("path");
+require(path.join(__dirname,"..","self-dap-core.js"));
+const off = fs.readFileSync(path.join(__dirname,"..","offscreen.js"),"utf8");
+const S = globalThis.YurikaSelfDap;
+const p70 = S.profile(70);
+assert.equal(p70.sideHpfHz,5);
+assert(p70.sideDelaySeconds === 0);
+assert(p70.sideGainDb <= 0.7 + 1e-12);
+assert(off.includes("analyser.connect(analyserSink)"));
+assert(off.includes("analyserSink.connect(ctx.destination)"));
+console.log("PASS self_dap_monitor_contract_test bounded M/S + live restoration analyser sink");

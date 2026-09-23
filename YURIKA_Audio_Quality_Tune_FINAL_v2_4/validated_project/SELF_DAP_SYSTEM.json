@@ -1,0 +1,97 @@
+{
+  "name": "YURIKA Self DAP + Perspective System Model",
+  "version": "1.4.0",
+  "basis": "uploaded 自作DAP(1).txt",
+  "source_scope": "software mapping of documented DSP/control intent; not a hardware electrical simulator",
+  "primary_path": [
+    "tabCapture PCM input",
+    "Noise Suppressor",
+    "Base EQ/Spectral Fill",
+    "Self DAP true-bypass stage",
+    "Width lateral stage",
+    "Perspective front-back stage",
+    "Virtual DAP output stage",
+    "Compressor",
+    "Auto Headroom",
+    "Safety Limiter",
+    "Glitchless master safety fade"
+  ],
+  "mapped_modules": {
+    "ADAU1452_AudioDSP": {
+      "source_lines": "2847-2934",
+      "software": "M/S matrix + Side 100 Hz HPF + ~200 us delay + presence gain + internal limiter + smoothed parameter application",
+      "status": "implemented; true FIR/all-pass hardware coefficients are not replicated"
+    },
+    "GlitchlessMUX_and_Mute": {
+      "source_lines": "5048-5088,6165-6222,6358-6416",
+      "software": "masterSafety fade-in/fade-out for start/stop/restart and crossfaded Self DAP bypass",
+      "status": "implemented behavioral analogue"
+    },
+    "FPGA_monitoring": {
+      "source_lines": "5729-5779,6763-6776",
+      "software": "spectrum monitor + hysteresis + stalled-monitor watchdog fallback",
+      "status": "implemented behavioral analogue; no FPGA/sub-us guarantee"
+    },
+    "BIGbomber": {
+      "source_lines": "6723-6816",
+      "software": "14-20 kHz spectrum-rolloff detector, low-signal bypass, 9-18 kHz selectable restoration cutoff, bounded harmonic wet path",
+      "status": "implemented approximation; codec metadata unavailable from tabCapture"
+    },
+    "DigitalFilter_Buffer": {
+      "source_lines": "7464-7504",
+      "software": "selectable 9-18 kHz reconstruction entry point + low-coloration output philosophy",
+      "status": "partial; 128-tap/64x2 polyphase FIR is not claimed"
+    },
+    "FinalSoundTarget": {
+      "source_lines": "7196-7220",
+      "software": "Perspective Depth stage separates front/back depth from lateral Width",
+      "status": "implemented perceptual model"
+    },
+    "ParameterStaging": {
+      "source_lines": "2909-2916",
+      "software": "revision guard + partial patch + smooth transitions + independent settings layers",
+      "status": "implemented browser analogue"
+    },
+    "Persistence": {
+      "source_lines": "6794-6802",
+      "software": "chrome.storage.local with schema migration",
+      "status": "implemented"
+    },
+    "AK4499EQ_OPA1622_ClassAB": {
+      "source_lines": "7394-7461,7464-7504",
+      "software": "neutral base with very-low-level bounded parallel saturation in Self DAP output model",
+      "status": "perceptual approximation only"
+    }
+  },
+  "perspective_model": {
+    "intent": "global scene depth / front-back perspective, not per-instrument distance separation",
+    "position": "after Width and before Virtual DAP",
+    "components": [
+      "dry anchor",
+      "150 Hz HPF ambience branch",
+      "3-13 ms pre-delay",
+      "9-16 kHz depth-dependent LPF",
+      "asymmetric 7-44 ms stereo early-reflection taps",
+      "max 12% wet"
+    ],
+    "headroom": "included in Auto Headroom budget"
+  },
+  "source_conflicts": [
+    {
+      "topic": "DAC identity",
+      "primary": "AK4499EQ in high-performance DAC section",
+      "other": "ES9038Q2M appears as MCLK sink in LowJitter_VCXO section",
+      "resolution": "ambiguity preserved; model uses AK4499EQ section as primary"
+    }
+  ],
+  "non_emulated": [
+    "physical power-supply noise",
+    "PCB ground impedance",
+    "actual clock phase noise/jitter",
+    "analog output current/voltage drive",
+    "hardware thermal bias drift",
+    "true DSD 1-bit path",
+    "true 128-tap/64x2 hardware FIR",
+    "per-source object separation/distance estimation"
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "version": "2.7.0",
+  "build_utc": "2026-09-22T04:01:34Z",
+  "features": [
+    "Voice Material Engine",
+    "Transparency/Air",
+    "Transient Edge Accent",
+    "Headphone Model Correction",
+    "Generic HRTF Virtualization"
+  ],
+  "tests": {
+    "js_tests": 31,
+    "static_checks": "123/123",
+    "adaptive_v27_fuzz": 100000,
+    "adaptive_v26_fuzz": 100000,
+    "perspective_simulation": "PASS",
+    "dependency_audit": "PASS"
+  },
+  "jiro": {
+    "design_audit_before_implementation": {
+      "score": 85.07,
+      "verdict": "pass_with_limits",
+      "must_constraints": "5/5"
+    },
+    "post_implementation_constraint_checks": "6/6",
+    "post_implementation_boolean_consistency": {
+      "backend": "z3",
+      "satisfiable": true
+    },
+    "note": "Natural-language polarity scanner produced false opposite-polarity flags on equivalent negated/positive statements; explicit Boolean consistency check was satisfiable."
+  },
+  "contracts": {
+    "speaker_identity_recognition": false,
+    "generated_broadband_noise_edge": false,
+    "personalized_hrtf": false,
+    "headphone_model_equals_hrtf": false,
+    "new_fixed_lookahead": false,
+    "gain_arbiter_single_effective_level_writer": true,
+    "new_modules_default_off": true
+  }
+}

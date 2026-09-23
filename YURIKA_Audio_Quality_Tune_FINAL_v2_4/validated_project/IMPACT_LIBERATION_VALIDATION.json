@@ -1,0 +1,43 @@
+{
+  "version": "2.5.0",
+  "feature": "Impact Liberation Engine",
+  "design": {
+    "main_path_serial_nodes_added": 0,
+    "impact_band_hz": [
+      1400,
+      9000
+    ],
+    "default_punch": 65,
+    "parallel_gain_caps": {
+      "headphone": 0.2,
+      "stereo": 0.24,
+      "smartphone": 0.075,
+      "tv": 0.14,
+      "portable": 0.09,
+      "multispeaker": 0.24
+    }
+  },
+  "invariants": [
+    "impact branch gain is zero at idle/off",
+    "pressure=1 forces impactGain=0 and compressorEscape=0",
+    "impact bypasses only broad compressor; Output/AutoLevel/AdaptiveTrim/Limiter remain downstream",
+    "Spark makeup remains additive-only"
+  ],
+  "status": "implementation complete; local regression tests passing; real-browser v2.5 recording pending",
+  "offline_conservative_branch_only_simulation": {
+    "source": "Untitled(20260921-203442).wav (v2.4 all-ON recording)",
+    "note": "uses recorded post-compressor signal as a conservative proxy for the new pre-compressor impact tap; Compressor Escape is not simulated",
+    "strong_events": 31,
+    "events_with_peak_increase_percent": 90.3,
+    "attack_peak_delta_db": {
+      "p25": 0.077,
+      "median": 0.174,
+      "p75": 0.325,
+      "p90": 0.618,
+      "p95": 0.696,
+      "p99": 0.947
+    },
+    "whole_program_rms_delta_db": 0.0084,
+    "whole_program_peak_delta_db": 0.106
+  }
+}

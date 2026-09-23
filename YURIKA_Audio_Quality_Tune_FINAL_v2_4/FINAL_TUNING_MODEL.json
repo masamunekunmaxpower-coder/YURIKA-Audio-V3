@@ -1,0 +1,85 @@
+{
+  "status": "PASS",
+  "scope": "deterministic linear model; no browser render or listening claim",
+  "selfdap_96k_strength70": [
+    {
+      "hz": 20,
+      "v23_cross_over_direct_db": 1.2943274460429306,
+      "final_cross_over_direct_db": -14.772491790798208
+    },
+    {
+      "hz": 40,
+      "v23_cross_over_direct_db": -6.73831707741434,
+      "final_cross_over_direct_db": -20.95724604311072
+    },
+    {
+      "hz": 63,
+      "v23_cross_over_direct_db": -11.391316507941278,
+      "final_cross_over_direct_db": -24.873658985653982
+    },
+    {
+      "hz": 125,
+      "v23_cross_over_direct_db": -17.663122094371637,
+      "final_cross_over_direct_db": -30.51168935528914
+    },
+    {
+      "hz": 250,
+      "v23_cross_over_direct_db": -23.489979920798984,
+      "final_cross_over_direct_db": -35.315068427163204
+    },
+    {
+      "hz": 1000,
+      "v23_cross_over_direct_db": -31.226262954342367,
+      "final_cross_over_direct_db": -36.32772403232982
+    },
+    {
+      "hz": 6000,
+      "v23_cross_over_direct_db": -27.88131811387391,
+      "final_cross_over_direct_db": -27.898718758156168
+    },
+    {
+      "hz": 10000,
+      "v23_cross_over_direct_db": -29.49576630803811,
+      "final_cross_over_direct_db": -29.34111617114883
+    },
+    {
+      "hz": 16000,
+      "v23_cross_over_direct_db": -32.91183894071349,
+      "final_cross_over_direct_db": -32.69709997152957
+    }
+  ],
+  "clean_lowcut_35hz_44100": [
+    {
+      "hz": 35,
+      "v23_mag_db": 0.6999999999933562,
+      "final_mag_db": -3.0980391997216064
+    },
+    {
+      "hz": 63,
+      "v23_mag_db": 1.3037268510602646,
+      "final_mag_db": -0.4448316316386878
+    },
+    {
+      "hz": 125,
+      "v23_mag_db": 0.3806680152744096,
+      "final_mag_db": -0.04039982460132548
+    },
+    {
+      "hz": 250,
+      "v23_mag_db": 0.09718444671419424,
+      "final_mag_db": -0.005138288811637168
+    },
+    {
+      "hz": 1000,
+      "v23_mag_db": 0.006089219904184643,
+      "final_mag_db": -0.0002228813173810197
+    }
+  ],
+  "neutral_flat": "true low-cut bypass at the 5 Hz sentinel; modeled filter phase is therefore removed from the neutral path",
+  "latency_topology": {
+    "neutral": "one final DynamicsCompressorNode limiter remains",
+    "music": "one final DynamicsCompressorNode limiter remains",
+    "selfdap": "redundant internal DynamicsCompressorNode removed from audible path; one final limiter remains",
+    "clean": "broad compressor plus final limiter remain intentionally"
+  }
+}

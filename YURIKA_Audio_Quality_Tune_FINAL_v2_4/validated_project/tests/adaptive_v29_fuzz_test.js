@@ -1,0 +1,4 @@
+"use strict";
+const assert=require("assert"),fs=require("fs"),vm=require("vm"),path=require("path");const root=path.resolve(__dirname,"..");const sb={globalThis:null};sb.globalThis=sb;vm.runInContext(fs.readFileSync(path.join(root,"adaptive-v29.js"),"utf8"),vm.createContext(sb));const a=sb.YurikaAdaptiveV29;
+for(let k=0;k<100000;k++){const noise=-90+Math.random()*40;const m=Array.from({length:8},()=>noise+5+Math.random()*45);const r=a.deriveCalibrationGains(m,noise);assert(r.gainsDb.length===8);for(const g of r.gainsDb){assert(Number.isFinite(g));assert(g>=-3.000001&&g<=3.000001);}assert(a.calibrationPrecutDb(r.gainsDb,Math.random()*100)<=1e-9);}
+console.log("PASS adaptive_v29_fuzz_test 100000 cases");

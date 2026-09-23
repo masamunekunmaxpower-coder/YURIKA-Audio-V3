@@ -1,0 +1,31 @@
+{
+  "version": "2.9.0",
+  "settings_schema": 13,
+  "base": "2.8.0",
+  "features": [
+    "output-device label auto matcher",
+    "selected AudioContext sink when supported",
+    "bounded 8-band test signal",
+    "measurement microphone/coupler calibration",
+    "8-band neutral-at-rest calibration EQ",
+    "calibration headroom pre-cut",
+    "HRTF remains separate"
+  ],
+  "tests": {
+    "javascript_test_files": "37/37 PASS",
+    "static": "142/142 PASS",
+    "adaptive_v29_fuzz": "100000 PASS",
+    "adaptive_v28_fuzz": "100000 PASS",
+    "adaptive_v27_fuzz": "100000 PASS",
+    "adaptive_v26_fuzz": "100000 PASS",
+    "dependency_audit": "PASS",
+    "perspective_48_96khz": "PASS"
+  },
+  "limits": [
+    "selectAudioOutput and AudioContext.setSinkId require browser support/permission",
+    "test signal alone is not a physical headphone measurement",
+    "acoustic calibration is intended for a measurement microphone/coupler; ordinary microphones are low-confidence",
+    "unknown output labels use generic-neutral",
+    "real headphone/ANC/pad/seal validation remains empirical"
+  ]
+}

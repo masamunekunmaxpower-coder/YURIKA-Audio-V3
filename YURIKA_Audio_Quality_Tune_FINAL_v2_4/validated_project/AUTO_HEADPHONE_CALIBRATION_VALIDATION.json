@@ -1,0 +1,21 @@
+{
+  "version": "2.9.0",
+  "schema": 13,
+  "design": {
+    "auto_detection": "user-selected output label -> exact/alias offline profile match; unknown -> generic-neutral",
+    "test_signal": "bounded sine sequence; verification only without acoustic feedback",
+    "acoustic_calibration": "8-band relative measurement using explicit microphone/coupler; low-SNR rejection; +/-3 dB cap",
+    "hrtf_separate": true,
+    "no_fixed_lookahead": true
+  },
+  "calibration_frequencies_hz": [
+    80,
+    160,
+    315,
+    630,
+    1250,
+    2500,
+    5000,
+    10000
+  ]
+}

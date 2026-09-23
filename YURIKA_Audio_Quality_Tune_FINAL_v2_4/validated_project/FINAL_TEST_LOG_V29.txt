@@ -1,0 +1,10 @@
+YURIKA Audio v2.9.0 final local validation
+JavaScript test files: 37/37 PASS
+Static audit: 142/142 PASS
+Adaptive v2.9 calibration fuzz: 100000 PASS
+Adaptive v2.8 fuzz: 100000 PASS
+Adaptive v2.7 fuzz: 100000 PASS
+Adaptive v2.6 fuzz: 100000 PASS
+Dependency audit: PASS
+Perspective simulation 48/96 kHz: PASS
+YURIKA Edge final design audit: 85.07 / pass_with_limits / 6 of 6 must constraints PASS
