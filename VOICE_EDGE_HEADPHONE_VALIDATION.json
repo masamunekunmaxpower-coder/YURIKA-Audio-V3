@@ -1,0 +1,23 @@
+{
+  "version": "2.7.0",
+  "features": {
+    "voice_material": {"identity_recognition": false, "modes": ["shallow","normal","deep"], "transparent_controls": ["amount","transparency","air"]},
+    "transient_edge": {"source": "signal-derived band-limited parallel branch", "generated_white_noise": false, "safety_zero": true, "device_max_wet": {"headphone":0.07,"stereo":0.09,"smartphone":0.04,"tv":0.052,"portable":0.04,"multispeaker":0.09}},
+    "headphone_correction": {"exact_model_registry": true, "profiles": ["generic-neutral","sennheiser-hd600","sony-wh1000xm5"], "headphone_output_only": true},
+    "hrtf": {"personalized": false, "profiles": ["natural","near","wide","front"], "direct_path_fixed_delay": false}
+  },
+  "safety_contract": {
+    "gain_arbiter_single_effective_level_writer": true,
+    "new_fixed_lookahead": false,
+    "orbit_staged_reset": true,
+    "off_no_intentional_audible_delta": true
+  },
+  "local_tests": {
+    "javascript_tests": 31,
+    "static_checks": 123,
+    "adaptive_v27_fuzz_cases": 100000,
+    "adaptive_v26_fuzz_cases": 100000,
+    "perspective_simulation": "pass",
+    "dependency_audit": "pass"
+  }
+}

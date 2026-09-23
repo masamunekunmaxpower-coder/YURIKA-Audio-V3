@@ -1,0 +1,40 @@
+{
+  "version": "2.4.0",
+  "method": "Exact Fast Spark detector/control simulation on user captures, with Spark makeup applied after the shared analyser as the v2.4 Gain Arbiter does. This estimates control magnitude only; it is not a rendered v2.4 browser capture.",
+  "architecture_assertions": {
+    "shared_analyser_position": "after Output and before AutoLevel/Gain Arbiter",
+    "spark_makeup_position": "AutoLevel Gain, after shared analyser",
+    "auto_level_observes_spark_makeup": false,
+    "output_gain_spark_writes": false,
+    "single_runtime_writer": "commitEffectiveLevelGain",
+    "effective_formula": "clamp((autoLevelEnabled ? autoLevelDb : 0) + (sparkEnabled ? max(0, sparkMakeupDb) : 0), -12, 6.8)"
+  },
+  "default_stereo_spark45_simulation": {
+    "v220_aligned": {
+      "duration_seconds": 54.14,
+      "makeup_mean_db": 0.13716001777283832,
+      "makeup_p95_db": 0.44900370738589995,
+      "makeup_max_db": 0.47607800893752156,
+      "estimated_rms_uplift_db": 0.19143557910250664,
+      "estimated_peak_uplift_db": 0.23293198874807608
+    },
+    "v230_aligned": {
+      "duration_seconds": 54.14,
+      "makeup_mean_db": 0.13537015848043715,
+      "makeup_p95_db": 0.44370945837709214,
+      "makeup_max_db": 0.47607800893752156,
+      "estimated_rms_uplift_db": 0.1763660773096234,
+      "estimated_peak_uplift_db": 0.4012124513322819
+    },
+    "v230_full": {
+      "duration_seconds": 59.12639583333333,
+      "makeup_mean_db": 0.12761444471288305,
+      "makeup_p95_db": 0.43526837412841496,
+      "makeup_max_db": 0.47607800893752156,
+      "estimated_rms_uplift_db": 0.17457831009451752,
+      "estimated_peak_uplift_db": 0.26285844957761206
+    }
+  },
+  "interpretation": "The bounded Spark envelope predicts roughly 0.17-0.19 dB RMS uplift, not the approximately 3.4 LUFS capture-to-capture difference previously observed. Moving makeup after the analyser prevents Auto Level from reacting against Spark and isolates capture/setup differences from the Spark detector itself.",
+  "unverified": "A newly rendered v2.4 browser capture under matched playback, Windows volume, YouTube volume, preset and Auto Level state remains required for final audible/output verification."
+}

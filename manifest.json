@@ -1,0 +1,52 @@
+{
+  "manifest_version": 3,
+  "name": "YURIKA Audio V3 + Jiero Interactive Guide",
+  "version": "3.0.0",
+  "description": "YURIKA v2.9音響コアを基盤に、ジーロ本人が各DSP・空間診断・安全機構を案内するV3インタラクティブガイドを統合。",
+  "minimum_chrome_version": "116",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "tabCapture",
+    "offscreen",
+    "tabs"
+  ],
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "action": {
+    "default_title": "YURIKA Audio Enhancer",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "version_name": "3.0.0 V3 Jiero Interactive Guide / v2.9 Audio Core",
+  "host_permissions": [
+    "https://www.youtube.com/*",
+    "https://youtube.com/*",
+    "https://m.youtube.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.youtube.com/*",
+        "https://youtube.com/*",
+        "https://m.youtube.com/*"
+      ],
+      "js": [
+        "youtube-av-sync.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

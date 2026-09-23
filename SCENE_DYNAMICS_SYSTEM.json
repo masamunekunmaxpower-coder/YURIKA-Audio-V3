@@ -1,0 +1,124 @@
+{
+  "version": "2.5.0",
+  "name": "YURIKA Scene Dynamics Engine",
+  "pattern_model": {
+    "axes": 7,
+    "levels_for_addressing": 5,
+    "cells": 78125,
+    "continuous_runtime": true,
+    "accent_codes": 100
+  },
+  "axes": [
+    "coolWarm",
+    "open",
+    "energy",
+    "spark",
+    "presence",
+    "distance",
+    "night"
+  ],
+  "runtime": {
+    "control_interval_ms": 50,
+    "shared_analyser_fft_size": 2048,
+    "graph_rebuild": false,
+    "parameter_modulation_only": true,
+    "scene_control_interval_ms": 50,
+    "spark_detector": "AudioWorklet side-chain",
+    "spark_report_interval_ms_approx": 8,
+    "audible_serial_nodes_added": 0,
+    "gain_arbiter": "commitEffectiveLevelGain single writer",
+    "spark_makeup_after_shared_analyser": true,
+    "auto_level_observes_spark_makeup": false
+  },
+  "device_profiles": [
+    "headphone",
+    "stereo",
+    "smartphone",
+    "tv",
+    "portable",
+    "multispeaker"
+  ],
+  "spark": {
+    "source": "2 ms fast RMS envelope - 35 ms slow RMS envelope, normalized transient gate",
+    "detector": "spark-monitor-worklet.js side-chain",
+    "fallback": "50 ms RMS transient when Worklet unavailable/stale",
+    "serial_effect_node_added": false,
+    "targets": [
+      "detail",
+      "reality",
+      "width",
+      "bounded transient AUTO LEVEL makeup"
+    ],
+    "maximum_makeup_db": {
+      "headphone": 0.8,
+      "stereo": 0.8,
+      "smartphone": 0.2,
+      "tv": 0.45,
+      "portable": 0.2,
+      "multispeaker": 0.8
+    },
+    "pressure_guard": "Limiter reduction and post-limiter safety peak remove Spark makeup first"
+  },
+  "multispeaker": {
+    "type": "virtual 2ch renderer",
+    "buses": [
+      "front",
+      "wide",
+      "ambient",
+      "rear",
+      "height"
+    ],
+    "physical_5_1_claim": false
+  },
+  "safety": {
+    "smartphone_low_cut_min_hz": 72,
+    "smartphone_bass_max_db": 0.25,
+    "limiter_pressure_reduces_dynamic_modulation": true
+  },
+  "fast_spark": {
+    "architecture": "0-gain side-chain; additive-only above slow Scene/Multi baseline",
+    "fast_envelope_ms": 2,
+    "slow_envelope_ms": 35,
+    "report_ms_approx": 8,
+    "fallback": "50 ms Scene transient when Worklet unavailable or stale",
+    "default_strong_hit_makeup_db": "approximately 0.3-0.6 dB",
+    "maximum_makeup_db": {
+      "headphone": 0.8,
+      "stereo": 0.8,
+      "smartphone": 0.2,
+      "tv": 0.45,
+      "portable": 0.2,
+      "multispeaker": 0.8
+    },
+    "safety": "pressure can reduce additions to zero but cannot push below slow baseline"
+  },
+  "gain_arbiter": {
+    "base_state": "autoLevelDb",
+    "transient_state": "sparkMakeupDb >= 0",
+    "effective_state": "effectiveLevelDb",
+    "single_writer": "commitEffectiveLevelGain",
+    "bounds_db": [
+      -12,
+      6.8
+    ],
+    "safety_behavior": "reduce Spark addition to zero without lowering Auto Level baseline",
+    "diagnostics": [
+      "autoLevelDb",
+      "sparkMakeupDb",
+      "effectiveLevelDb",
+      "adaptiveTrimDb",
+      "limiterReductionDb"
+    ]
+  },
+  "impact_liberation": {
+    "enabled_default": true,
+    "amount_default": 65,
+    "band_hz": [
+      1400,
+      9000
+    ],
+    "topology": "parallel pre-compressor tap -> band limit -> transient gain -> post-compressor sum",
+    "safety": "pressure scales impact gain and compressor escape to zero",
+    "serial_nodes_added_to_main_path": 0
+  }
+}

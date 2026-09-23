@@ -1,0 +1,42 @@
+{
+  "version": "2.8.0",
+  "design": {
+    "spatial_metrics": "zero-output sidechain after HRTF/headphone correction; diagnostics only",
+    "metrics": [
+      "ITD proxy",
+      "ILD",
+      "low/high ILD",
+      "absolute IACC",
+      "signed IACC",
+      "IACC lag",
+      "interaural coherence",
+      "lateralization proxy",
+      "localization cue-error proxy",
+      "HRTF cue consistency"
+    ],
+    "localization_error": "cue-consistency proxy, not human localization ground truth",
+    "reflection_character": "bounded 3-tap early-reflection playback cue; not physical room reflectivity",
+    "cpu_scheduler": "navigator.hardwareConcurrency capacity hint only; browser owns JIT/audio thread/core scheduling",
+    "av_sync": "optional positive audio delay 0-150 ms; useful only when audio leads video",
+    "multitab": "tabId-keyed independent capture ON/OFF; concurrent sources share the global DSP bus",
+    "per_tab_settings": "not implemented in v2.8; settings are global/shared"
+  },
+  "tests": {
+    "javascript": "35/35 PASS",
+    "static": "138/138 PASS",
+    "dependency_audit": "PASS",
+    "perspective_simulation": "PASS 48/96 kHz",
+    "v28_fuzz": "100000 PASS",
+    "v27_fuzz": "100000 PASS",
+    "v26_fuzz": "100000 PASS",
+    "spatial_worklet_known_delay_ild_inverse_polarity": "PASS",
+    "multitab_service_worker": "PASS"
+  },
+  "jiro_final_audit": {
+    "engine": "Yurika Edge Reasoning Core 1.4.0",
+    "score": 90.63,
+    "verdict": "pass_with_limits",
+    "must_constraints": "6/6 PASS",
+    "note": "deterministic design audit; browser endurance/listening remain empirical"
+  }
+}

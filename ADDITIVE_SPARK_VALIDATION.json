@@ -1,0 +1,67 @@
+{
+  "version": "2.4.0",
+  "method": "Exact Fast Spark detector simulation plus additive-only control curve. This validates detector/control magnitude, not a rendered browser output. Detector curve retained in v2.4; gain routing is separately validated in GAIN_ARBITER_VALIDATION.json.",
+  "curve": {
+    "gate": 0.1,
+    "pulse_exponent": 0.55,
+    "weight_exponent_for_makeup": 0.65,
+    "stereo_max_db": 0.8,
+    "default_amount": 45
+  },
+  "captures": {
+    "v220_real_capture": {
+      "sample_rate": 48000,
+      "duration_seconds": 54.14,
+      "reports": 6768,
+      "pulse_mean": 0.20834342077366932,
+      "pulse_p50": 0.09128920431763046,
+      "pulse_p90": 0.6240796979316928,
+      "pulse_p95": 0.8639935790538111,
+      "pulse_p99": 1.0,
+      "makeup_default45_mean_db": 0.13715949364307306,
+      "makeup_default45_p50_db": 0.0,
+      "makeup_default45_p90_db": 0.392392735831557,
+      "makeup_default45_p95_db": 0.4489944570558155,
+      "makeup_default45_p99_db": 0.47607800893752156,
+      "makeup_over_0_3_fraction": 0.21645981087470448,
+      "makeup_over_0_4_fraction": 0.09249408983451536,
+      "max_db": 0.47607800893752156
+    },
+    "v210_three_on": {
+      "sample_rate": 48000,
+      "duration_seconds": 82.79,
+      "reports": 10349,
+      "pulse_mean": 0.17654188014302974,
+      "pulse_p50": 0.07063971952921812,
+      "pulse_p90": 0.530787730906943,
+      "pulse_p95": 0.7496716938802906,
+      "pulse_p99": 0.9995371441878533,
+      "makeup_default45_mean_db": 0.11906989976117285,
+      "makeup_default45_p50_db": 0.0,
+      "makeup_default45_p90_db": 0.3658352489467779,
+      "makeup_default45_p95_db": 0.42371511215358526,
+      "makeup_default45_p99_db": 0.4759904643814172,
+      "makeup_over_0_3_fraction": 0.17605565755145425,
+      "makeup_over_0_4_fraction": 0.06773601314136632,
+      "max_db": 0.47607800893752156
+    },
+    "v200_all_on": {
+      "sample_rate": 48000,
+      "duration_seconds": 77.00872916666667,
+      "reports": 9627,
+      "pulse_mean": 0.2058842228431636,
+      "pulse_p50": 0.09357598663288753,
+      "pulse_p90": 0.5945505713845085,
+      "pulse_p95": 0.8162642200792641,
+      "pulse_p99": 1.0,
+      "makeup_default45_mean_db": 0.13863471583746576,
+      "makeup_default45_p50_db": 0.0,
+      "makeup_default45_p90_db": 0.384341030937869,
+      "makeup_default45_p95_db": 0.43875805916080446,
+      "makeup_default45_p99_db": 0.47607800893752156,
+      "makeup_over_0_3_fraction": 0.2184481146774696,
+      "makeup_over_0_4_fraction": 0.0832034901838579,
+      "max_db": 0.47607800893752156
+    }
+  }
+}

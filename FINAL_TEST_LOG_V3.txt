@@ -1,0 +1,24 @@
+YURIKA Audio V3 final local validation
+
+Base audio core: v2.9.0 Auto Headphone Calibration
+Manifest version: 3.0.0
+Settings schema: 13 (unchanged)
+
+Integration:
+- v3-guide.html (extension-safe)
+- v3-guide.js (external script for MV3 CSP)
+- YURIKA_V3_JIERO_INTERACTIVE_GUIDE_STANDALONE.html
+- Popup launcher: V3 ジーロガイドを開く
+
+Regression checks:
+- Existing v2.9 audio-core files hash-identical to source package
+- Existing-file changes limited to manifest.json, popup.html, popup.js, README.md, tests/static_test.py
+- popup.js node --check: PASS
+- v3-guide.js node --check: PASS
+- JavaScript test files: 37 / 37 PASS
+- Static audit: 145 / 145 PASS
+- Dependency audit: PASS
+- Perspective simulation 48/96 kHz: PASS
+
+Limit:
+- A real Chrome/Edge unpacked-extension load remains the final browser UI/CSP integration validation.

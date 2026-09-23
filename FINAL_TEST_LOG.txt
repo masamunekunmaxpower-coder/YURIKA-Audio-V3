@@ -1,0 +1,160 @@
+YURIKA Audio v2.6.0 FINAL TEST LOG
+Generated 2026-09-22
+
+[1] JavaScript syntax
+PASS package JS syntax: 12 files
+
+[2] JavaScript tests
+PASS adaptive_v26_fuzz_test 100000 cases maxValley=1.2500dB
+PASS adaptive_v26_test seam discrimination + bounded valley + safety zero + orbit escalation
+PASS audio_modules_test graph builders + true DAC/room/integrity/cartridge bypass + correlated cartridge unity + equal-power deck mix
+PASS audio_supervisor_logic_test adaptive trim bounds/release/off + stereo classification
+PASS auto_level_runtime_test target tracking + +6/-12 bounds + off unity
+PASS deck_replacement_failure_test failed replacement leaves old deck alive and disposes new stream
+PASS dj_auto_mix_runtime_test A->B equal-power automation reaches target and clears timer
+PASS dj_external_runtime_test dual deck add/replace/stale-ended guard/release + external input lifecycle
+PASS dsp_logic_test advanced DSP + virtual DAP + self DAP + perspective
+PASS failure_paths_test 96k fallback + worklet fallback + mono input + DAP/self-DAP stereo processing bypass
+PASS fuzz_test 10000 randomized settings + headroom + independent layers
+PASS gain_arbiter_runtime_test single-writer + nonnegative Spark + Output isolation + independent reset
+PASS impact_liberation_test 6 devices x 1001 pulses x pressure sweep + off/kill invariants
+PASS modular_core_test decimal precision + DAC/room/integrity/cartridge/autolevel/DJ invariants + 20k fuzz
+PASS noise_worklet_test bypass + quiet suppression + loud preservation
+PASS popup_interaction_test Self DAP sticky through DSP edits + normal preset isolation + pagehide flush
+PASS revision_guard_test partial patches preserve layers + stale revisions rejected + clean shutdown
+PASS runtime_mock_test layered DAP + perspective + true bypass + safety fade
+PASS safety_meter_stress_test 512000 stereo frames / 125 reports / nonfinite sanitized
+PASS safety_meter_worklet_test passthrough + correlation + non-finite sanitization
+PASS scene_engine_test 78,125 cells + additive Fast Spark + Impact Liberation + pressure kill + device caps + Multi controls
+PASS self_dap_system_test profile + spectrum + auto restoration
+PASS service_worker_state_test canonical authority + single-key patches + preset isolation + 1000 serialized actions + restart persistence
+PASS settings_layer_test EQ/DAP/Perspective layer isolation + system preset + migration
+PASS spark_monitor_worklet_test fast attack + seam features + held release + zero-output side-chain
+PASS state_engine_stress_test 50000 actions + independent layer invariants + explicit edits sticky
+PASS stress_runtime_test 200 start/stop cycles + 5000 revisions + stale rejection
+PASS transaction_rollback_test deck/external failures restore canonical state transactionally
+TOTAL JS tests: 28 PASS
+
+[3] Static audit
+PASS manifest_v3
+PASS version_2_6_0
+PASS chrome_116
+PASS permissions_exact
+PASS no_host_permissions
+PASS service_worker
+PASS no_eval_modular-core.js
+PASS no_network_modular-core.js
+PASS no_eval_dsp-core.js
+PASS no_network_dsp-core.js
+PASS no_eval_audio-modules.js
+PASS no_network_audio-modules.js
+PASS no_eval_self-dap-core.js
+PASS no_network_self-dap-core.js
+PASS no_eval_scene-engine.js
+PASS no_network_scene-engine.js
+PASS no_eval_adaptive-v26.js
+PASS no_network_adaptive-v26.js
+PASS no_eval_service-worker.js
+PASS no_network_service-worker.js
+PASS no_eval_offscreen.js
+PASS no_network_offscreen.js
+PASS no_eval_popup.js
+PASS no_network_popup.js
+PASS no_eval_noise-worklet.js
+PASS no_network_noise-worklet.js
+PASS no_eval_safety-meter-worklet.js
+PASS no_network_safety-meter-worklet.js
+PASS no_eval_spark-monitor-worklet.js
+PASS no_network_spark-monitor-worklet.js
+PASS offscreen_path_declared
+PASS workers_reason
+PASS youtube_gate
+PASS audio_only_capture
+PASS audio_worklet
+PASS noise_worklet_file
+PASS safety_worklet_file
+PASS spark_worklet_file
+PASS detail_shaper
+PASS oversampling
+PASS width_matrix
+PASS reality_convolver
+PASS spectral_fill
+PASS hires_96k
+PASS hires_restart
+PASS limiter
+PASS track_stop
+PASS context_close
+PASS ui_advanced
+PASS dsd_disclaimer
+PASS virtual_dap_ui
+PASS virtual_dap_core
+PASS virtual_dap_nodes
+PASS dap_crossfeed_bounded
+PASS self_dap_file
+PASS self_dap_html
+PASS self_dap_core
+PASS self_dap_ms
+PASS self_dap_restoration
+PASS self_dap_output_stage
+PASS layered_preset_core
+PASS revision_guard
+PASS popup_state_engine
+PASS sw_canonical_state
+PASS layer_note
+PASS perspective_ui
+PASS perspective_core
+PASS perspective_nodes
+PASS self_dap_true_bypass
+PASS restoration_cutoff
+PASS restoration_watchdog
+PASS glitchless_master
+PASS adaptive_safety
+PASS safety_meter
+PASS stereo_diagnostic
+PASS curve_cache
+PASS precision_decimal
+PASS dac_matrix
+PASS room_engine
+PASS integrity_engine
+PASS auto_level
+PASS dj_2deck
+PASS dj_auto_mix
+PASS cartridge_lab
+PASS external_input
+PASS scene_engine_file
+PASS scene_ui
+PASS scene_core
+PASS short_shared_analyser
+PASS scene_runtime
+PASS fast_spark_sidechain
+PASS fast_spark_no_serial_insert
+PASS additive_spark_floor
+PASS gain_arbiter_single_writer
+PASS spark_not_on_output
+PASS gain_diagnostics
+PASS impact_ui
+PASS impact_core
+PASS impact_parallel_lane
+PASS impact_not_serial
+PASS impact_band_limited
+PASS impact_safety_pressure
+PASS impact_diagnostics
+PASS adaptive_v26_file
+PASS seam_ui
+PASS seam_monitor_features
+PASS valley_ui
+PASS valley_unity_node
+PASS orbit_keeper
+PASS v26_off_equivalence_hooks
+TOTAL 110 / PASS 110 / FAIL 0
+
+[4] Dependency audit
+PASS dependency_audit scripts + settings + message protocol + permission graph
+PASS audio_supervisor_graph adaptiveTrim -> limiter -> safetyMeter -> masterSafety
+
+[5] Perspective simulation
+PASS perspective_simulation 48/96k impulse peak + energy + reflection timing bounds
+
+[6] Jiro deterministic final audit
+Yurika Edge Reasoning Core 1.4.0: 85.87 / pass_with_limits / must constraints 5/5 PASS
+Note: Jiro deterministic review does not execute browser code; local execution evidence is listed above.

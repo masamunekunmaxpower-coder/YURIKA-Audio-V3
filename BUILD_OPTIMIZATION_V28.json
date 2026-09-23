@@ -1,0 +1,25 @@
+{
+  "version": "2.8.0",
+  "strategy": "Web Audio realtime-safe runtime optimization",
+  "claims": {
+    "explicit_aot_compile": false,
+    "browser_jit_owned_by_engine": true,
+    "audio_core_affinity_control": false,
+    "hardwareConcurrency_is_hint": true
+  },
+  "optimizations": [
+    "preallocated spatial ring buffers",
+    "bounded cross-correlation lag window",
+    "control-rate metric reporting",
+    "CPU-tier diagnostic cadence",
+    "concurrent-session cap by CPU tier",
+    "zero-wet/off-neutral branches",
+    "no automatic per-render allocations in normal audio path"
+  ],
+  "cpu_tiers": {
+    "1-2": "conservative/max1",
+    "3-4": "balanced/max2",
+    "5-8": "parallel/max3",
+    "9+": "extended/max4"
+  }
+}

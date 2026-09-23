@@ -1,0 +1,168 @@
+{
+  "version": "2.1.0",
+  "control_plane": {
+    "authority": "service-worker.js",
+    "storage": "chrome.storage.local",
+    "serialization": "single action queue",
+    "revision": "monotonic",
+    "rollback": "exact previous canonical settings restored when Deck/External start fails"
+  },
+  "runtime": {
+    "orchestrator": "offscreen.js",
+    "audio_contexts": 1,
+    "input_modes": [
+      "single tab",
+      "DJ Deck A/B",
+      "external getUserMedia"
+    ],
+    "modules": [
+      "modular-core.js",
+      "audio-modules.js",
+      "dsp-core.js",
+      "self-dap-core.js",
+      "noise-worklet.js",
+      "scene-engine.js",
+      "safety-meter-worklet.js"
+    ]
+  },
+  "dsp_chain": [
+    {
+      "from": "Input/Deck/External",
+      "to": "Cartridge Lab",
+      "failure": "raw bypass / source cleanup"
+    },
+    {
+      "from": "Cartridge Lab",
+      "to": "Tone/Detail/Reality",
+      "failure": "raw bypass when disabled"
+    },
+    {
+      "from": "Tone/Detail/Reality",
+      "to": "Self DAP",
+      "failure": "existing DSP fallbacks retained"
+    },
+    {
+      "from": "Self DAP",
+      "to": "Width/Perspective",
+      "failure": "true dry bypass when disabled"
+    },
+    {
+      "from": "Perspective",
+      "to": "DAC Matrix",
+      "failure": "DAC OFF uses raw dry path"
+    },
+    {
+      "from": "DAC Matrix",
+      "to": "Virtual DAP",
+      "failure": "bounded software profile"
+    },
+    {
+      "from": "Virtual DAP",
+      "to": "Room Engine",
+      "failure": "Room OFF uses raw dry path"
+    },
+    {
+      "from": "Room Engine",
+      "to": "Integrity Engine",
+      "failure": "Integrity OFF uses raw dry path"
+    },
+    {
+      "from": "Integrity Engine",
+      "to": "Compressor/Output",
+      "failure": "neutral when disabled"
+    },
+    {
+      "from": "Output",
+      "to": "AUTO LEVEL (direct)",
+      "failure": "unity when disabled; shared analyser is side-chain, not inline"
+    },
+    {
+      "from": "Auto Level",
+      "to": "Adaptive Trim",
+      "failure": "trim bounded -3..0 dB"
+    },
+    {
+      "from": "Adaptive Trim",
+      "to": "Limiter",
+      "failure": "limiter remains downstream"
+    },
+    {
+      "from": "Limiter",
+      "to": "Safety Meter",
+      "failure": "GainNode fallback if worklet unavailable"
+    },
+    {
+      "from": "Safety Meter",
+      "to": "Master Safety",
+      "failure": "audio continues if meter unavailable"
+    },
+    {
+      "from": "Master Safety",
+      "to": "Destination",
+      "failure": "fade on start/stop"
+    }
+  ],
+  "dj_dependencies": {
+    "deck_capture": "chrome.tabCapture stream IDs from explicit user arm",
+    "mixer": "one AudioContext, independent branch gains/EQ",
+    "crossfade": "equal-power",
+    "auto_mix": "offscreen timer, not service-worker timer",
+    "replacement": "new branch constructed before old deck retirement",
+    "new_deck_entry": "gain starts at 0 then ramps to target",
+    "stale_end_guard": "stream identity invalidated/checked before ended events can mutate replacement"
+  },
+  "external_input": {
+    "api": "getUserMedia audio",
+    "echoCancellation": false,
+    "noiseSuppression": false,
+    "autoGainControl": false,
+    "failure": "source cleanup + canonical rollback"
+  },
+  "permission_graph": {
+    "permissions": [
+      "storage",
+      "activeTab",
+      "tabCapture",
+      "offscreen"
+    ],
+    "host_permissions": [],
+    "network_calls": false,
+    "audio_recording_storage": false
+  },
+  "scene_dynamics": {
+    "audio_graph_policy": "fixed graph; runtime parameter modulation only",
+    "shared_analyser": "side-chain from Output; reused by AUTO LEVEL and Scene Dynamics",
+    "scene_axes": [
+      "cool_warm",
+      "open",
+      "energy",
+      "spark",
+      "presence",
+      "distance",
+      "night"
+    ],
+    "addressable_scene_cells": 78125,
+    "dynamic_exponent": [
+      0.5,
+      2.2
+    ],
+    "control_interval_ms": 50,
+    "device_profiles": [
+      "headphone",
+      "stereo",
+      "smartphone",
+      "tv",
+      "portable",
+      "multispeaker"
+    ],
+    "virtual_multispeaker_buses": [
+      "front",
+      "wide",
+      "ambient",
+      "rear",
+      "height"
+    ],
+    "physical_multichannel_claim": false,
+    "failure": "Scene engine absent/disabled => canonical static DSP settings remain active"
+  }
+}
