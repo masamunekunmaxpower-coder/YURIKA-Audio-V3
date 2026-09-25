@@ -50,7 +50,7 @@ try {
   page.on("console", msg => console.log(`[browser:${msg.type()}] ${msg.text()}`));
   page.on("pageerror", err => console.error("[browser:pageerror]", err));
   await page.goto(`chrome-extension://${extensionId}/tests/audio_quality/runtime.html`, { waitUntil:"load", timeout:30_000 });
-  await page.waitForFunction(() => typeof globalThis.runSpatialLocalizationTest === "function" && typeof globalThis.runVirtualAmpBench === "function", null, { timeout:30_000 });
+  await page.waitForFunction(() => typeof globalThis.runSpatialLocalizationTest === "function" && typeof globalThis.runVirtualAmpBench === "function" && typeof globalThis.runSonoBusDiagnosticTest === "function", null, { timeout:30_000 });
 
   const capabilities = await page.evaluate(() => globalThis.getYurikaSpecializedCapabilities?.() ?? {spatial:false,virtualAmp:false});
   fs.writeFileSync(path.join(outDir, "specialized-capabilities.json"), JSON.stringify(capabilities, null, 2));
@@ -69,6 +69,22 @@ try {
   fs.writeFileSync(path.join(outDir, "spatial.status.json"), JSON.stringify(spatialSmall.status ?? {}, null, 2));
   fs.writeFileSync(path.join(outDir, "spatial.runtime.json"), JSON.stringify(spatialSmall, null, 2));
   } else { console.log("[YURIKA] Spatial specialized bench skipped: feature unavailable."); }
+
+  if (capabilities.sonobus) {
+  console.log("[YURIKA] Rendering SonoBus Mobile stage-isolation benchmark...");
+  const sonobusSmall = await page.evaluate(async () => {
+    globalThis.__SPECIALIZED_SONOBUS_RESULT__ = null;
+    return await globalThis.runSonoBusDiagnosticTest(chrome.runtime.getURL("tests/audio_quality/quality-stimulus.wav"));
+  });
+  await page.waitForFunction(() => globalThis.__SPECIALIZED_SONOBUS_RESULT__?.final?.left, null, { timeout:180_000 });
+  const sonobus = await page.evaluate(() => globalThis.__SPECIALIZED_SONOBUS_RESULT__);
+  dumpTap("sonobus", "pre-hrtf", sonobus.preHrtf, sonobus.sampleRate);
+  dumpTap("sonobus", "post-hrtf", sonobus.postHrtf, sonobus.sampleRate);
+  dumpTap("sonobus", "post-spatial", sonobus.postSpatial, sonobus.sampleRate);
+  dumpTap("sonobus", "final", sonobus.final, sonobus.sampleRate);
+  fs.writeFileSync(path.join(outDir, "sonobus.status.json"), JSON.stringify(sonobusSmall.status ?? {}, null, 2));
+  fs.writeFileSync(path.join(outDir, "sonobus.runtime.json"), JSON.stringify(sonobusSmall, null, 2));
+  } else { console.log("[YURIKA] SonoBus specialized bench skipped: feature unavailable."); }
 
   if (capabilities.virtualAmp) {
   console.log("[YURIKA] Rendering Virtual Class-A amplifier benchmark...");

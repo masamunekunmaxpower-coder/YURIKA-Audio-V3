@@ -1,0 +1,9 @@
+YURIKA Audio 3.3.0
+
+Production tuning:
+- HRTF-aware Spatial cue preservation reduces secondary lateral widening after HRTF.
+- Local headphone HRTF path: secondary cue factor 0.30.
+- SonoBus remote binaural HRTF path: secondary cue factor 0.26.
+- SonoBus automatic dataset-free HRTF fallback: natural profile, minimum 30% amount.
+- Exact post-fix SonoBus THD+N and 3D cue improvement require the GitHub Audio Quality V2.2 rerun.
+- C++/WASM Virtual Class-A Amp and reusable C++ DSP SDK remain enabled as in 3.2.9.

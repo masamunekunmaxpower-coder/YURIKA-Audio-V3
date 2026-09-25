@@ -44,6 +44,7 @@ jobs:
           python tests/candidate_static_test.py
           node tests/remote_mobile_contract_test.js
           node tests/virtual_amp_contract_test.js
+          node tests/spatial_cue_preservation_test.js
 
       - name: Legacy compatibility advisory
         continue-on-error: true
@@ -65,7 +66,7 @@ jobs:
       - name: Analyzer identity self-test
         run: python tests/audio_quality/analyzer_selftest.py
 
-      - name: Generate specialized spatial / amp stimuli
+      - name: Generate specialized spatial / SonoBus / amp stimuli
         run: python tests/audio_quality/generate_specialized_stimuli.py
 
       - name: Specialized analyzer self-test
@@ -82,10 +83,10 @@ jobs:
       - name: Analyze audio quality
         run: python tests/audio_quality/metrics.py
 
-      - name: Render 3D localization and Virtual Amp benches
+      - name: Render 3D localization, SonoBus and Virtual Amp benches
         run: node tests/audio_quality/run_specialized_playwright.mjs
 
-      - name: Analyze 3D localization and Virtual Amp benches
+      - name: Analyze 3D localization, SonoBus and Virtual Amp benches
         run: python tests/audio_quality/specialized_metrics.py
 
       - name: Job summary

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "YURIKA Audio - GIRO MONATIUM 3.2.9",
-  "version": "3.2.9",
-  "description": "YURIKA Audio GIRO MONATIUM 3.2.9 — C++/WASM DSP SDK, internal Class-A virtual amplifier, and startup noise-worklet regression fix.",
+  "name": "YURIKA Audio - GIRO MONATIUM 3.3.0",
+  "version": "3.3.0",
+  "description": "YURIKA Audio GIRO MONATIUM 3.3.0 — HRTF cue-preserving Spatial refinement, conservative SonoBus dataset-free HRTF, internal C++/WASM Class-A amp and reusable DSP SDK.",
   "minimum_chrome_version": "116",
   "permissions": [
     "storage",
@@ -30,7 +30,7 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "version_name": "3.2.9 C++/WASM SDK + Startup Noise Worklet Fix",
+  "version_name": "3.3.0 Cue Preservation + SonoBus Diagnostic Split",
   "host_permissions": [
     "https://www.youtube.com/*",
     "https://youtube.com/*",

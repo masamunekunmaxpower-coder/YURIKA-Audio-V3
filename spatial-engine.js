@@ -63,36 +63,40 @@
     const baseStrength = clamp(profile.spatialStrength, 0, 0.8);
     const strength = clamp(baseStrength * mode.strength, 0, 0.80);
     const hrtfAlreadyActive = Boolean(settings.hrtfEnabled) && headphoneLike;
+    const remoteBinaural = profile.deviceType === "remote-binaural";
+    // When HRTF already carries interaural localization cues, Spatial must add depth without
+    // creating a second strong lateralization field. The factor intentionally preserves a
+    // small amount of ambience/width while protecting HRTF azimuth cues.
+    const cuePreservationFactor = hrtfAlreadyActive ? (remoteBinaural ? 0.26 : 0.30) : 1.0;
 
     const width = clamp(strength * mode.width * sc.width, 0, headphoneLike ? 0.72 : 0.62);
     const depth = clamp(strength * mode.depth * sc.depth, 0, 0.72);
     const elevation = clamp(strength * clamp(profile.elevationStrength, 0, 1) * mode.elevation, 0, 0.24);
     const lowCentering = profile.lowFrequencyPolicy === "strict-center" ? 0.78 : 0.62;
-    const sideLowDb = -clamp(1.0 + 4.0 * width * lowCentering, 0, 4.8);
-    const sideHighDb = clamp(0.25 + 1.45 * width, 0, 1.45);
-    const sideGain = clamp(1 + 0.34 * width, 1, 1.22);
+    const sideLowDb = -clamp((1.0 + 4.0 * width * lowCentering) * cuePreservationFactor, 0, 4.8);
+    const sideHighDb = clamp((0.25 + 1.45 * width) * cuePreservationFactor, 0, 1.45);
+    const sideGain = clamp(1 + 0.34 * width * cuePreservationFactor, 1, 1.22);
     const centerGain = clamp(sc.center, 0.98, 1.07);
-    const sideDelaySeconds = Number(inputChannels) < 2 ? 0 : clamp((0.00005 + 0.00028 * clamp(profile.itdScale,0,1) * width), 0, 0.00028);
-    const ildAmountDb = clamp(0.15 + 1.0 * clamp(profile.ildScale,0,1) * width, 0, 0.75);
-    const remoteBinaural = profile.deviceType === "remote-binaural";
-    const reflection = Number(inputChannels) < 2 ? 0 : clamp(profile.earlyReflectionAmount * mode.reflection * sc.reflection * (0.55 + depth), 0, remoteBinaural ? 0.010 : 0.055);
+    const sideDelaySeconds = Number(inputChannels) < 2 ? 0 : clamp((0.00005 + 0.00028 * clamp(profile.itdScale,0,1) * width) * cuePreservationFactor, 0, 0.00028);
+    const ildAmountDb = clamp((0.15 + 1.0 * clamp(profile.ildScale,0,1) * width) * cuePreservationFactor, 0, 0.75);
+    const reflection = Number(inputChannels) < 2 ? 0 : clamp(profile.earlyReflectionAmount * mode.reflection * sc.reflection * (0.55 + depth) * (hrtfAlreadyActive ? 0.68 : 1), 0, remoteBinaural ? 0.010 : 0.055);
     const reflectionDelaySeconds = clamp(0.0035 + 0.0105 * depth, 0.0035, 0.0125);
     const reflectionLowpassHz = clamp(14500 - 6500 * depth, 6500, Math.min(14500, sampleRate * 0.43));
     const reflectionHighpassHz = profile.lowFrequencyPolicy === "strict-center" ? 240 : 170;
-    const crossfeed = headphoneLike ? clamp(profile.crossfeedAmount * (0.72 + 0.28 * strength), 0, 0.045) : 0;
+    const crossfeed = headphoneLike ? clamp(profile.crossfeedAmount * (0.72 + 0.28 * strength) * (hrtfAlreadyActive ? 0.45 : 1), 0, 0.045) : 0;
     // Generic speaker crosstalk cancellation intentionally remains zero. Calibrated cancellation is a future profile feature.
     const crosstalkControl = speakerLike ? clamp(profile.crosstalkControl, -0.012, 0) : 0;
     const estimatedCrosstalk = headphoneLike ? crossfeed : Math.abs(crosstalkControl);
     const outputGainCompensationDb = clamp(Number(profile.outputGainCompensation || 0) - 0.28 * width - 0.22 * reflection * 10, -1.6, 0);
     const safeHeadroomDb = clamp(Number(profile.safeHeadroom || 1.2) + 0.35 * width, 0.8, 2.2);
-    const pinnaGainDb = headphoneLike ? clamp(elevation * 2.2, 0, 0.50) : clamp(elevation * 1.2, 0, 0.20);
+    const pinnaGainDb = headphoneLike ? clamp(elevation * 2.2 * (hrtfAlreadyActive ? 0.45 : 1), 0, 0.50) : clamp(elevation * 1.2, 0, 0.20);
 
     return freeze({
       enabled:Boolean(settings.spatialEnabled) && Number(inputChannels) >= 1,
       mode:settings.spatialMode || "auto",
       profileId:r.profileId || profile.id || "unknown",
       deviceType:profile.deviceType || "speaker", remoteBinaural,
-      strength,width,depth,elevation,
+      strength,width,depth,elevation,cuePreservationFactor,
       centerGain, sideGain, sideLowDb, sideHighDb,
       sideDelaySeconds, ildAmountDb,
       earlyReflection:reflection, reflectionDelaySeconds, reflectionLowpassHz, reflectionHighpassHz,
@@ -277,6 +281,6 @@
   }
 
   globalThis.YurikaSpatialEngine = freeze({
-    VERSION:"1.2.0", MODE_SHAPES, computeParameters, createStage, apply, dispose
+    VERSION:"1.3.0", MODE_SHAPES, computeParameters, createStage, apply, dispose
   });
 })();

@@ -556,8 +556,10 @@ function applyHrtfAndHeadphone(next, initial=false, previous=null){
   const localHeadphoneMode=isLocalHeadphoneIntent(next);
   const remoteBinaural=next.spatialEnabled && next.spatialOutputTarget==="sonobus-mobile-headphones";
   const hrtfMode=localHeadphoneMode || remoteBinaural;
-  const hrtfName=remoteBinaural && !next.hrtfEnabled ? "front" : next.hrtfProfile;
-  const hrtfAmount=remoteBinaural ? Math.max(38,Number(next.hrtfAmount)||0) : Number(next.hrtfAmount)||0;
+  // Remote dataset-free HRTF stays automatic, but defaults to the less aggressive natural
+  // field. This avoids stacking a strong front cue field on top of the dedicated Spatial layer.
+  const hrtfName=remoteBinaural && !next.hrtfEnabled ? "natural" : next.hrtfProfile;
+  const hrtfAmount=remoteBinaural ? Math.max(30,Number(next.hrtfAmount)||0) : Number(next.hrtfAmount)||0;
   const hp=AdaptiveV27.hrtfProfile(hrtfName,hrtfMode && (next.hrtfEnabled||remoteBinaural) ? hrtfAmount : 0);
   if(!h.mono){ const d=1/(1+hp.crossfeed); smooth(h.directL.gain,d,ctx.currentTime,initial?0.05:0.10); smooth(h.directR.gain,d,ctx.currentTime,initial?0.05:0.10); smooth(h.crossL.gain,hp.crossfeed*d,ctx.currentTime,0.10); smooth(h.crossR.gain,hp.crossfeed*d,ctx.currentTime,0.10); smooth(h.delayL.delayTime,hp.delaySeconds,ctx.currentTime,0.10); smooth(h.delayR.delayTime,hp.delaySeconds,ctx.currentTime,0.10); smooth(h.lpL.frequency,Math.min(hp.lowpassHz,ctx.sampleRate*0.44),ctx.currentTime,0.10); smooth(h.lpR.frequency,Math.min(hp.lowpassHz,ctx.sampleRate*0.44),ctx.currentTime,0.10); smooth(h.pinna.gain,hp.pinnaDb,ctx.currentTime,0.10); smooth(h.air.gain,hp.airDb,ctx.currentTime,0.10); }
   const profile=HeadphoneProfiles.getProfile(next.headphoneModel); const strength=next.headphoneCorrectionEnabled&&localHeadphoneMode?Math.max(0,Math.min(1,next.headphoneCorrectionStrength/100)):0;
@@ -1860,7 +1862,7 @@ function status() {
     headphoneEffectiveMode:isLocalHeadphoneIntent(state.settings),
     hrtfEnabled: Boolean(state.settings.hrtfEnabled), hrtfProfile: state.settings.hrtfProfile, hrtfAmount: state.settings.hrtfAmount,
     hrtfEffectiveEnabled:Boolean((state.settings.hrtfEnabled && isLocalHeadphoneIntent(state.settings)) || (state.settings.spatialEnabled && state.settings.spatialOutputTarget==="sonobus-mobile-headphones")),
-    hrtfEffectiveProfile:(state.settings.spatialEnabled && state.settings.spatialOutputTarget==="sonobus-mobile-headphones" && !state.settings.hrtfEnabled)?"front":state.settings.hrtfProfile,
+    hrtfEffectiveProfile:(state.settings.spatialEnabled && state.settings.spatialOutputTarget==="sonobus-mobile-headphones" && !state.settings.hrtfEnabled)?"natural":state.settings.hrtfProfile,
     hrtfDatasetFreeParametric:Boolean(state.settings.spatialEnabled && state.settings.spatialOutputTarget==="sonobus-mobile-headphones"),
     orbitKeeperEnabled: state.settings.orbitKeeperEnabled !== false,
     orbitHealthScore: Number(state.orbitHealthScore.toFixed(1)),

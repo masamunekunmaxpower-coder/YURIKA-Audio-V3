@@ -5,7 +5,8 @@ function getYurikaSpecializedCapabilities() {
   const C=globalThis.YurikaAudioCore;
   return {
     spatial:Boolean(C?.DEFAULTS && Object.prototype.hasOwnProperty.call(C.DEFAULTS,"spatialEnabled") && globalThis.YurikaSpatialEngine),
-    virtualAmp:Boolean(C?.DEFAULTS && Object.prototype.hasOwnProperty.call(C.DEFAULTS,"virtualAmpEnabled") && globalThis.YurikaVirtualAmp)
+    virtualAmp:Boolean(C?.DEFAULTS && Object.prototype.hasOwnProperty.call(C.DEFAULTS,"virtualAmpEnabled") && globalThis.YurikaVirtualAmp),
+    sonobus:Boolean(C?.DEFAULTS && Object.prototype.hasOwnProperty.call(C.DEFAULTS,"spatialOutputTarget") && globalThis.YurikaSpatialEngine)
   };
 }
 
@@ -93,6 +94,20 @@ function specializedSettings(kind) {
       hrtfEnabled:true,
       hrtfProfile:"natural",
       hrtfAmount:42,
+      virtualAmpEnabled:false
+    });
+  }
+  if (kind === "sonobus") {
+    return C.sanitizeSettings({
+      ...base,
+      preset:"flat",
+      spatialEnabled:true,
+      spatialMode:"natural",
+      spatialDeviceProfile:"auto",
+      spatialOutputTarget:"sonobus-mobile-headphones",
+      deviceProfile:"stereo",
+      hrtfEnabled:false,
+      hrtfAmount:0,
       virtualAmpEnabled:false
     });
   }
@@ -235,6 +250,37 @@ async function runVirtualAmpBench(inputUrl) {
   }
 }
 
+
+async function runSonoBusDiagnosticTest(inputUrl) {
+  const settings = specializedSettings("sonobus");
+  let session;
+  try {
+    session = await startSpecialized(settings, 1993);
+    const state = session.state;
+    const nodes = state.nodes;
+    const captured = await captureNodesForStimulus(state, inputUrl, {
+      preHrtf:nodes.integrity?.sum,
+      postHrtf:nodes.hrtf?.air,
+      postSpatial:nodes.spatial3d?.output,
+      final:nodes.avSync?.sum
+    });
+    const status = globalThis.__YURIKA_TEST_API__.status();
+    const result = {
+      sampleRate:captured.sampleRate,
+      status,
+      preHrtf:encodeCaptureResult(captured.results.preHrtf),
+      postHrtf:encodeCaptureResult(captured.results.postHrtf),
+      postSpatial:encodeCaptureResult(captured.results.postSpatial),
+      final:encodeCaptureResult(captured.results.final)
+    };
+    globalThis.__SPECIALIZED_SONOBUS_RESULT__ = result;
+    return { sampleRate:result.sampleRate, status, taps:["preHrtf","postHrtf","postSpatial","final"] };
+  } finally {
+    await stopSpecialized(session);
+  }
+}
+
 globalThis.getYurikaSpecializedCapabilities = getYurikaSpecializedCapabilities;
 globalThis.runSpatialLocalizationTest = runSpatialLocalizationTest;
 globalThis.runVirtualAmpBench = runVirtualAmpBench;
+globalThis.runSonoBusDiagnosticTest = runSonoBusDiagnosticTest;

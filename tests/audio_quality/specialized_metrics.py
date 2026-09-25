@@ -204,7 +204,7 @@ def spatial_analysis():
     sdiag=status.get('spatial3d') or {}
     warnings=[]; critical=[]
     if sdiag:
-        if not str(sdiag.get('hrtfStatus','')).startswith('existing:'): warnings.append('runtime HRTF status was not existing:<profile>')
+        if not str(sdiag.get('hrtfProfile','')).startswith('existing:'): warnings.append('runtime HRTF status was not existing:<profile>')
         if sdiag.get('resolvedDeviceProfile') not in (None,'generic-headphone'): warnings.append('runtime spatial profile was not generic-headphone')
     if az_full['direction_sign_accuracy_pct'] < 100: critical.append('azimuth cue polarity reversal detected')
     if az_full['monotonicity_spearman'] < 0.90: critical.append('azimuth cue ordering/monotonicity < 0.90')
@@ -386,6 +386,62 @@ def amp_analysis():
         'reference_model_note':'Rated/max wattage, output impedance, damping factor and slew-rate-equivalent are software reference electrical-model values; the waveform measurements above are the actual Web Audio C++/WASM stage measurements.'
     }
 
+def low_frequency_residual_db(seg, sr, f=1000):
+    mono=np.mean(seg,axis=1)
+    fit,fund,res=fit_fundamental(mono,sr,f)
+    if len(res)<16: return -300.0
+    sos=signal.butter(4, min(20.0/(sr/2),0.99), btype='lowpass', output='sos')
+    low=signal.sosfiltfilt(sos,res)
+    return db20(rms(low)/max(fund,1e-15))
+
+
+def stage_quality(seg, sr):
+    seg=np.asarray(seg,float)
+    seg=seg[int(0.12*sr):int(0.88*sr)] if len(seg)>int(0.9*sr) else seg
+    mono=np.mean(seg,axis=1)
+    td=thdn_db(mono,sr,1000)
+    thd,_=thd_harmonics(mono,sr,1000)
+    imd=ccif_imd(seg,sr)
+    corr=float(np.corrcoef(seg[:,0],seg[:,1])[0,1]) if len(seg)>2 else 0.0
+    return {
+      'thdn_db':round(td,3),'thd_db':round(thd,3),'ccif_imd_db':round(imd,3),
+      'low_frequency_residual_db':round(low_frequency_residual_db(seg,sr),3),
+      'lr_correlation':round(corr,6),'rms_dbfs':round(db20(rms(seg)),3)
+    }
+
+
+def sonobus_analysis():
+    names=['pre-hrtf','post-hrtf','post-spatial','final']
+    data={}; sr=None
+    for n in names:
+        x,s=read_stereo(RESULTS/f'sonobus.{n}.wav')
+        if sr is None: sr=s
+        elif sr!=s: raise RuntimeError('SonoBus stage tap sample-rate mismatch')
+        data[n]=x
+    # Align all stages to pre-HRTF so changes are not mistaken for transport offsets.
+    ref=data['pre-hrtf']; aligned={'pre-hrtf':ref}; lat={}
+    for n in names[1:]:
+        lag=xcorr_lag(ref,data[n],sr,30); r,o=align_pair(ref,data[n],lag)
+        m=min(len(r),len(o)); ref=r[:m]; aligned[n]=o[:m]; lat[n]=round(lag*1000/sr,4)
+    # Quality stimulus sine and two-tone segments use the same timing as metrics.py.
+    import metrics as base_metrics
+    stages={}
+    for n in names:
+        x=aligned.get(n,data[n])
+        sine=base_metrics.slice_seg(x,sr,'sine')
+        twotone=base_metrics.slice_seg(x,sr,'twotone')
+        q=stage_quality(sine,sr)
+        q['ccif_imd_db']=round(base_metrics.imd_19_20(twotone,sr),3)
+        stages[n]=q
+    status={}; sp=RESULTS/'sonobus.status.json'
+    if sp.exists(): status=json.loads(sp.read_text())
+    return {
+      'gate':'PASS','critical':[],'warnings':[], 'sample_rate':sr,
+      'latency_ms_from_pre_hrtf':lat, 'stages':stages,
+      'runtime_spatial':status.get('spatial3d') or {},
+      'runtime_hrtf_effective':bool(status.get('hrtfEffectiveEnabled')),
+      'interpretation_note':'Stage-isolation diagnostic only. It identifies where THD+N/IMD/residual changes appear; it does not itself prove the causal mechanism.'
+    }
 
 def render_report(report):
     lines=['# YURIKA Specialized Spatial / Virtual Amp Report','',f"Specialized gate: **{report['gate']}**",'']
@@ -412,6 +468,18 @@ def render_report(report):
         ]
     else:
         lines += ['## 3D localization cue performance','','Specialized Spatial bench: **SKIPPED** (candidate does not expose the required Spatial/HRTF feature set).','']
+
+    so=report.get('sonobus')
+    if so and not so.get('skipped'):
+        lines += ['## SonoBus Mobile stage-isolation diagnostic','',
+                  '> This is a debug breakdown of the dataset-free remote binaural path. It does not replace the normal final-output quality profile.','',
+                  '| Stage | THD+N dB | THD dB | CCIF IMD dB | <20 Hz residual / fundamental dB | L/R corr |','|---|---:|---:|---:|---:|---:|']
+        for key,label in [('pre-hrtf','Pre HRTF'),('post-hrtf','Post HRTF'),('post-spatial','Post Spatial'),('final','Final')]:
+            q=so['stages'][key]
+            lines.append(f"| {label} | {q['thdn_db']:.2f} | {q['thd_db']:.2f} | {q['ccif_imd_db']:.2f} | {q['low_frequency_residual_db']:.2f} | {q['lr_correlation']:.4f} |")
+        lines += ['',f"- Runtime HRTF effective: **{so['runtime_hrtf_effective']}**",f"- Runtime Spatial profile: `{so['runtime_spatial'].get('resolvedDeviceProfile','unknown')}`",'']
+    else:
+        lines += ['## SonoBus Mobile stage-isolation diagnostic','','SonoBus diagnostic: **SKIPPED**.','']
 
     a=report.get('amp')
     if a and not a.get('skipped'):
@@ -445,15 +513,16 @@ def render_report(report):
 
 def main():
     caps_path=RESULTS/'specialized-capabilities.json'
-    caps={'spatial':(RESULTS/'spatial.post.wav').exists(),'virtualAmp':(RESULTS/'amp.post.wav').exists()}
+    caps={'spatial':(RESULTS/'spatial.post.wav').exists(),'virtualAmp':(RESULTS/'amp.post.wav').exists(),'sonobus':(RESULTS/'sonobus.final.wav').exists()}
     if caps_path.exists():
         try: caps.update(json.loads(caps_path.read_text()))
         except Exception: pass
     spatial=spatial_analysis() if caps.get('spatial') and (RESULTS/'spatial.post.wav').exists() else {'gate':'SKIP','critical':[],'warnings':[],'skipped':True}
+    sonobus=sonobus_analysis() if caps.get('sonobus') and (RESULTS/'sonobus.final.wav').exists() else {'gate':'SKIP','critical':[],'warnings':[],'skipped':True}
     amp=amp_analysis() if caps.get('virtualAmp') and (RESULTS/'amp.post.wav').exists() else {'gate':'SKIP','critical':[],'warnings':[],'skipped':True}
     critical=[f"spatial: {x}" for x in spatial.get('critical',[])]+[f"amp: {x}" for x in amp.get('critical',[])]
-    warnings=[f"spatial: {x}" for x in spatial.get('warnings',[])]+[f"amp: {x}" for x in amp.get('warnings',[])]
-    report={'gate':'PASS' if not critical else 'FAIL','critical':critical,'warnings':warnings,'capabilities':caps,'spatial':spatial,'amp':amp,
+    warnings=[f"spatial: {x}" for x in spatial.get('warnings',[])]+[f"sonobus: {x}" for x in sonobus.get('warnings',[])]+[f"amp: {x}" for x in amp.get('warnings',[])]
+    report={'gate':'PASS' if not critical else 'FAIL','critical':critical,'warnings':warnings,'capabilities':caps,'spatial':spatial,'sonobus':sonobus,'amp':amp,
             'notes':['3D localization results are objective acoustic-cue proxies. Human localization requires listening tests, and non-individual HRTF front/back/elevation performance is listener dependent.']}
     RESULTS.mkdir(parents=True,exist_ok=True)
     (RESULTS/'specialized-report.json').write_text(json.dumps(report,indent=2,ensure_ascii=False),encoding='utf-8')

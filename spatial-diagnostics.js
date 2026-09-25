@@ -23,6 +23,7 @@
       sampleRate: finite(context?.sampleRate),
       hrtfProfile: p.hrtfStatus || "none",
       spatialStrength: finite(p.strength, 0),
+      cuePreservationFactor: finite(p.cuePreservationFactor, 1),
       depth: finite(p.depth, 0),
       width: finite(p.width, 0),
       elevation: finite(p.elevation, 0),
@@ -47,5 +48,5 @@
     });
   }
 
-  globalThis.YurikaSpatialDiagnostics = freeze({ VERSION:"1.1.0", snapshot });
+  globalThis.YurikaSpatialDiagnostics = freeze({ VERSION:"1.2.0", snapshot });
 })();

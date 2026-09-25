@@ -31,6 +31,7 @@
     "spatial-engine.js",
     "spatial-metrics-worklet.js",
     "STARTUP_REGRESSION_FIX_3.2.9.txt",
+    "TUNING_3.3.0.txt",
     "v3-guide.html",
     "v3-guide.js",
     "virtual-amp-core.cpp",
