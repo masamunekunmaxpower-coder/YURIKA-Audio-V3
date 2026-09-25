@@ -237,22 +237,24 @@ async function getStatus() {
 async function propagateCanonicalChange(previous, next, patch, revision) {
   if (!next.enabled) return { ok: true, inactive: true, revision };
   const hiResChanged = Boolean(previous.hiResMode) !== Boolean(next.hiResMode);
-  if (hiResChanged) {
+  const remoteLatencyChanged = String(previous.spatialOutputTarget||"local").startsWith("sonobus-") !== String(next.spatialOutputTarget||"local").startsWith("sonobus-");
+  if (hiResChanged || remoteLatencyChanged) {
     const st = await getStatus();
     if (st?.inputMode === "dj" || st?.inputMode === "external") {
       const response = await chrome.runtime.sendMessage({ target:"offscreen", type:"UPDATE_SETTINGS", settings:patch, revision });
-      return { ...(response||{ok:true}), restartRequired:true, note:"Hi-Res sample-rate change takes effect after re-arming the current input mode." };
+      return { ...(response||{ok:true}), restartRequired:true, note:"AudioContext latency/sample-rate policy change takes effect after re-arming the current input mode." };
     }
     // Do not tear down unrelated captured tabs merely because one canonical setting changed.
     // AudioContext sample-rate cannot be changed in place, so defer Hi-Res until sessions are re-armed.
     if (Number(st?.sessionCount || 0) > 1) {
       const livePatch = { ...(patch || {}) };
       delete livePatch.hiResMode;
+      delete livePatch.spatialOutputTarget;
       let response = { ok:true, revision };
       if (Object.keys(livePatch).length) {
         response = (await chrome.runtime.sendMessage({ target:"offscreen", type:"UPDATE_SETTINGS", settings:livePatch, revision })) || response;
       }
-      return { ...response, restartRequired:true, deferredHiRes:true, note:"Hi-Res sample-rate change is deferred until the current multi-tab sessions are re-armed; existing tabs remain running." };
+      return { ...response, restartRequired:true, deferredContextPolicy:true, note:"AudioContext latency/sample-rate policy change is deferred until current multi-tab sessions are re-armed; existing tabs remain running." };
     }
     await stopProcessing();
     return startForActiveTab(next, { forceRestart: true, revision });
@@ -326,6 +328,22 @@ async function setCanonicalEnabled(enabled) {
   return { ok: true, settings: canonicalSettings, revision, runtime, changed: diffSettings(previous, canonicalSettings) };
 }
 
+
+async function applyRuntimeSpatialPatch(rawPatch = {}) {
+  await loadCanonical();
+  const allowed = new Set(["spatialOutputDeviceId","spatialOutputLabel","spatialDeviceProfile","spatialOutputTarget"]);
+  const filtered = {};
+  for (const [k,v] of Object.entries(rawPatch || {})) if (allowed.has(k)) filtered[k]=v;
+  if (!Object.keys(filtered).length) return {ok:true,settings:canonicalSettings,revision:canonicalRevision,changed:{}};
+  const previous=canonicalSettings;
+  const next=sanitizeSettings({...canonicalSettings,...filtered});
+  const changed=diffSettings(previous,next);
+  canonicalSettings=next;
+  const revision=nextRevision();
+  await persistCanonical();
+  return {ok:true,settings:canonicalSettings,revision,changed};
+}
+
 async function getCanonicalSettings() {
   await loadCanonical();
   return { ok: true, settings: canonicalSettings, revision: canonicalRevision };
@@ -333,7 +351,7 @@ async function getCanonicalSettings() {
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (!message || message.target !== "service-worker") return false;
-  const serialized = new Set(["GET_SETTINGS", "APPLY_PATCH", "APPLY_PRESET", "SET_ENABLED", "LIST_YOUTUBE_TABS", "SET_TAB_SESSION", "ARM_DECK", "STOP_DECK", "START_EXTERNAL", "AUTO_MIX", "START", "RESTART", "STOP", "UPDATE_SETTINGS", "OFFSCREEN_ENDED"]);
+  const serialized = new Set(["GET_SETTINGS", "APPLY_PATCH", "APPLY_PRESET", "SET_ENABLED", "LIST_YOUTUBE_TABS", "SET_TAB_SESSION", "ARM_DECK", "STOP_DECK", "START_EXTERNAL", "AUTO_MIX", "START", "RESTART", "STOP", "UPDATE_SETTINGS", "SPATIAL_RUNTIME_PATCH", "OFFSCREEN_ENDED"]);
   const run = async () => {
     switch (message.type) {
       case "GET_SETTINGS": return getCanonicalSettings();
@@ -347,6 +365,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       case "STOP_DECK": return releaseDeck(message.deck);
       case "START_EXTERNAL": return startExternalInput();
       case "AUTO_MIX": return startDjAutoMix(message.direction);
+      case "SPATIAL_RUNTIME_PATCH": return applyRuntimeSpatialPatch(message.patch || {});
+      case "SPATIAL_EVENT": {
+        try { await chrome.runtime.sendMessage({target:"popup",type:"SPATIAL_EVENT",event:message.event,detail:message.detail||{}}); } catch {}
+        return {ok:true};
+      }
 
       // Backward-compatible protocol. New popup code does not use these paths.
       case "START": {

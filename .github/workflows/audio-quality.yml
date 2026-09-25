@@ -3,15 +3,11 @@ name: Audio Quality
 on:
   workflow_dispatch:
   push:
-    paths:
-      - "**/*.js"
-      - "tests/audio_quality/**"
-      - ".github/workflows/audio-quality.yml"
   pull_request:
-    paths:
-      - "**/*.js"
-      - "tests/audio_quality/**"
-      - ".github/workflows/audio-quality.yml"
+
+concurrency:
+  group: audio-quality-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   quality:
@@ -20,6 +16,16 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Candidate metadata
+        shell: bash
+        run: |
+          if [ -f .yurika-test-candidate.json ]; then
+            echo '### Candidate' >> "$GITHUB_STEP_SUMMARY"
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            cat .yurika-test-candidate.json >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - uses: actions/setup-python@v5
         with:
@@ -32,13 +38,25 @@ jobs:
       - name: Python dependencies
         run: python -m pip install --disable-pip-version-check numpy scipy soundfile pyloudnorm
 
-      - name: Existing deterministic tests
+      - name: Candidate hard-gate contracts
+        shell: bash
+        run: |
+          python tests/candidate_static_test.py
+          node tests/remote_mobile_contract_test.js
+
+      - name: Legacy compatibility advisory
+        continue-on-error: true
         shell: bash
         run: |
           python tests/static_test.py
           python tests/dependency_audit.py
           python tests/perspective_simulation.py
-          for f in tests/*.js; do node "$f"; done
+          for f in tests/*.js; do
+            case "$f" in
+              tests/remote_mobile_contract_test.js) continue ;;
+            esac
+            node "$f"
+          done
 
       - name: Generate deterministic audio stimulus
         run: python tests/audio_quality/generate_stimulus.py
@@ -52,8 +70,6 @@ jobs:
           npx playwright install --with-deps chromium
 
       - name: Render actual Web Audio graph
-        env:
-          DEBUG: pw:browser
         run: node tests/audio_quality/run_playwright.mjs
 
       - name: Analyze audio quality

@@ -1,0 +1,30 @@
+{
+  "version": "GIRO_MONATIUM_v3_1_RC",
+  "core_sha256": {
+    "popup.js": "68973c47277d3bd8b2618790a4e7cd91396d98be5dfeda9502676943a7d56d70",
+    "popup.css": "c1394eae75beeb94d6ed00337d32eff783d9f6683b5a96345fd01a7105a0ee37",
+    "service-worker.js": "0fcaa9cf44f260156070dadd01db91cc1ecc4f17de04fd2dd122b6bfcfaa8993",
+    "offscreen.js": "db110ae0c538a8934ba80bf82a93ecfffe18bcdbd192b2c868d9425e65bd7f83",
+    "dsp-core.js": "8eae5ab5950a3d74587ee9266ec1ee096ddddcce0cb8e2960ac5d5ba3e43e40f",
+    "modular-core.js": "68704f7684bb7c85363645030e201f409339abd018b42afe5afc14e22722f733",
+    "adaptive-v29.js": "67ae19451386d7faf822d7fb2c13bdba541be7147ef20dc95044fec833ac2ccf",
+    "headphone-profiles.js": "33d90f2285c459bcb0bdfe709f350ca522a2281e4c0a5997e924bad0b0482a8e",
+    "manifest.json": "b6a5af2d5e9771a94bc2dc2728b01ee7026ede61c1443d1b15ebd7a3a6ca34dc",
+    "youtube-av-sync.js": "8c9bd63eb80cea2e4ac04e53b838e315a1e993fdef684614e575035cce73d4b7"
+  },
+  "ui_assets_sha256": {
+    "popup.html": "e0187189f426530fa8e2c4fd0f354ed4f6ebaa1e43e43c710e2a3a4e77cd8d2a",
+    "giro-tabs.js": "2b289beb916cad6a906e23bd1b084a6e50de5268eb14bbbd56fa09f20de0d476",
+    "giro-character.js": "87f953008153ee1dda8e8ea226af4ea26f6e20761cf925441d5eeb9b0bafa9d0",
+    "giro-character.css": "c92d309cb6e77c1dc002ed14192df9cf2b949e0d1a70ed313ff8d272d5ea8fb0",
+    "assets/monatium-bg-v3.png": "d45064083046022d7fcce9d4f923f360fce4fffdd9a88f7f2f96c565636ae459",
+    "assets/monatium-ui-shell-v2.svg": "ac62faa64e0cf6cce6a4ef9e8b4f0e1ffbbbb23ae910c0d966eda490ba9f9d12",
+    "assets/rim-116-ram-companion.png": "e36cf3bbdc7b1bdaabbb2ca0675669c1b78dce4a57fc2697ab2a1ecd1b63f1b1",
+    "assets/giro-poses/giro-idle.png": "c03421a8f54b11fb85b8ffdaa7ded63d851626166dd0f80c885f3185dcfe8d0e",
+    "assets/giro-poses/giro-walk.png": "4a86b5628bbcfd98b16f6373b1bd3ab94264fda4018109d25329a07610b38645",
+    "assets/giro-poses/giro-run.png": "438dafa21711f8437bdde9aa7d8efe14e97de4724d2a3ebe128ae0c6157e72b0",
+    "assets/giro-poses/giro-sit.png": "1debe2bb7f9e65c386a25bb6228469238981f490ddae933fc7f315098bf2f1a9",
+    "assets/giro-poses/giro-music.png": "19aa69c1edcc65c97c3ef2e3bc53b89a7639b58678ebe0474425233d1316238e",
+    "assets/giro-poses/giro-explain.png": "cb3ada7c55d2eeb3d3aa7158e95b21d411bd2979f72e04bc27b7f21ab34b4659"
+  }
+}

@@ -1,0 +1,16 @@
+RIM-116 RAM reference notes for the Giro companion design
+
+Real-world reference used only for broad visual/role inspiration:
+- RIM-116 Rolling Airframe Missile (RAM): lightweight quick-reaction fire-and-forget ship self-defense missile.
+- U.S. Navy fact file lists the Mk 49 RAM Guided Missile Launching System with 21 missile capacity.
+- RAM family uses passive RF/IR guidance concepts depending on block; current fictional implementation does not reproduce or simulate real guidance/fire-control logic.
+
+Fiction-side rules from the user's setting file take priority:
+- Monatium-made compact autonomous interceptor exoshell.
+- About half the player's height in-world.
+- Giro treats it as chair, transport and companion more than a weapon.
+- Short-range flight and autonomous response are fictionalized.
+- It may react to Giro's anxiety, anger, excitement, hunger and self-deprecation.
+- Concept-ammunition and sugar-consumption rules are fictional and remain separate from the real RIM-116 system.
+
+UI implementation intentionally includes no firing controls, target logic, guidance simulation, or weapon-operation workflow.

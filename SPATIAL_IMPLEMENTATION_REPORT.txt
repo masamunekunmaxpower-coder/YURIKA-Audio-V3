@@ -1,0 +1,431 @@
+YURIKA Audio - GIRO MONATIUM 3.2.0
+3D Spatial Ecosystem Implementation Report
+Report date: 2026-09-25
+Base: YURIKA Audio GIRO MONATIUM 3.1.4 Voice / HRTF Diagnostic Stability
+
+==================================================
+0. 結論
+==================================================
+3D Spatialを既存DSPの置換ではなく独立レイヤーとして追加した。
+既存HRTF / Headphone Correction / Scene / Spark / Impact / Seam / Valley / Edge /
+Auto Level / Adaptive Safety / Limiter / A/V Syncを削除・簡略化していない。
+
+Spatial OFF時はDry本線を常時維持し、Wet処理枝のみフェード終了後に切断する。
+そのためON/OFFのためにDry本線をdisconnect/connectしない。
+
+実装・静的統合・mock Web Audio・数値参照モデルの検証はPASS。
+ただし、この実行環境では実音声デバイス付きChromeによるI/O実測を完了できなかった。
+したがって実機Latency / THD+N / LUFS / crosstalk / 主観定位性能は「測定済み」とは表示しない。
+本報告末尾にChrome実機確認手順を記載する。
+
+==================================================
+1. 変更ファイル一覧
+==================================================
+- manifest.json
+  3.2.0へ更新。既存permissions/host_permissionsは維持。
+- dsp-core.js
+  schema 14。Spatial独立設定を追加。旧preset audio keysは変更なし。
+- offscreen.html
+  Spatial専用3モジュールをoffscreen.jsより前に読み込む。
+- offscreen.js
+  Spatial stage、device/sink監視、fallback、Diagnostics、GIROイベント連携を追加。
+- service-worker.js
+  Spatial出力情報の限定runtime patchとspatial:*イベント中継を追加。
+- popup.html
+  3D SPATIAL ON/OFF、mode/profile/output選択、詳細Diagnosticsを追加。
+  既存内部preset名 flat は互換維持し、表示だけ Neutral (Flat) と明示。
+- popup.js
+  Spatial UI、出力選択、状態表示、Diagnostics表示、イベント受信を追加。
+- popup.css
+  Spatialパネル最小限のスタイルを追加。
+- CHANGELOG_PRODUCT.txt
+- GIRO_MONATIUM_V3_README.txt
+- README_INSTALL.txt
+
+==================================================
+2. 新規ファイル一覧
+==================================================
+- spatial-engine.js
+  独立3D Spatial DSP。Web Audio native nodes中心。
+- spatial-device-profiles.js
+  拡張可能なDevice Profile Registry。
+- spatial-diagnostics.js
+  Spatial専用Diagnostics snapshot。
+- SPATIAL_IMPLEMENTATION_REPORT.txt
+  本報告書。
+- tests/spatial-regression.test.js
+- tests/spatial-web-audio-mock.test.js
+- tests/static-integration.test.js
+- tests/emit-spatial-params.js
+- tests/spatial-reference-model.py
+- tests/spatial-reference-model-result.json
+- tests/spatial-browser-test.html
+
+Device Profile Registry初期収録:
+Generic Headphone / Generic IEM / Generic Earbuds / Generic Stereo Speaker /
+Laptop Speaker / TV / Bluetooth Speaker / Studio Monitor /
+Sennheiser HD600 / Sony WH-1000XM5 / AirPods family
+
+各Profileは最低限、deviceType / channelLayout / sampleRatePreference /
+spatialStrength / hrtfProfile / crossfeedAmount / crosstalkControl /
+lowFrequencyPolicy / earlyReflectionAmount / itdScale / ildScale /
+elevationStrength / distanceStrength / outputGainCompensation /
+latencyCompensation / safeHeadroom を保持する。
+
+==================================================
+3. Signal Flow
+==================================================
+既存上流DSP
+  -> HRTF
+  -> Headphone Correction
+  -> Compressor / Impact / Edge / Reflection mix
+  -> Output
+  -> Transient Valley
+  -> [既存 shared analyser / Spark monitor はここから並列監視]
+  -> 3D Spatial Layer  [NEW]
+  -> Auto Level
+  -> Adaptive Trim / Safety control
+  -> Final Limiter
+  -> Safety Meter
+  -> Master Safety
+  -> A/V Sync
+  -> AudioContext.destination
+
+Spatialは既存HRTFより後段、最終Limiter/Safetyより前段。
+既存Scene監視用analyserの観測点は変更していない。
+
+==================================================
+4. 3D OFF時のBypass経路
+==================================================
+Transient Valley
+  -> Spatial dryGain = 1.0
+  -> Spatial output
+  -> Auto Level -> Adaptive Trim -> Limiter -> Safety ...
+
+Spatial wetGain = 0.0。
+OFF transition完了後、input -> wetIngress のWet枝だけを切断する。
+Dry本線はON/OFF切替で切断しない。
+
+初期OFF時もDry=1 / Wet=0。
+新Spatial設定のdefaultは spatialEnabled=false。
+
+注意:
+Web Audio上ではunity GainNodeを1段通るため、「実ブラウザでbit-for-bit同一」とは
+この環境では証明していない。旧設定/プリセット/出力算出の回帰とmock graphは一致確認済み。
+
+==================================================
+5. 3D ON時の経路
+==================================================
+Transient Valley
+  -> Dry branch --------------------------\
+                                           equal-power mix -> Spatial output
+  -> Wet branch -> M/S spatial processing /
+
+ON時はWet枝を先に再接続し、約70msのequal-power transitionでDry->Wetへ移行。
+OFF時はWet->Dryへ同じ方式で移行後、約115ms後にWet ingressだけ切断。
+
+Headphone / IEM / Earbuds:
+- M/Sによる周波数依存width
+- 低域Sideを抑制しcenter stability優先
+- 高域Sideを保守的に拡張
+- side-onlyのsub-ms cue delay
+- filtered crossfeed
+- early cross reflection
+- 小さいpinna/elevation spectral hint
+- static conservative output gain compensation
+
+Speaker / TV / Laptop / Studio Monitor:
+- Headphone用crossfeedを使用しない
+- Binaural/HRTF convolutionをSpatial側では追加しない
+- frequency-dependent M/S width
+- bounded decorrelation / early reflection
+- Generic profileのcrosstalk cancellationは0（将来のCalibrated Speaker用余地のみ保持）
+
+既存HRTFが有効なheadphone modeではSpatial側は二重HRTF convolutionを行わず、
+Diagnosticsに existing:<profile> として既存HRTF使用中を示す。
+
+==================================================
+6. Device detection / fallback設計
+==================================================
+使用するAPIはすべてfeature detection付き。
+- navigator.mediaDevices.selectAudioOutput() : 使用可能時、ユーザーのボタン操作からのみ呼ぶ
+- navigator.mediaDevices.enumerateDevices()
+- AudioContext.setSinkId()
+- devicechange
+- sinkchange (利用可能な場合)
+
+出力選択のためにgetUserMedia()を呼ばない。
+したがって追加のマイク権限を勝手に要求しない。
+この代償として、権限/API環境によっては列挙できる出力やlabelがDefaultだけになる。
+
+保存対象:
+- spatialEnabled
+- spatialMode
+- spatialDeviceProfile
+- spatialOutputDeviceId
+- spatialOutputLabel
+
+保存deviceIdが消失した場合:
+1) enumerateDevicesで不在を検知
+2) spatialOutputDeviceIdを default へ戻す
+3) Spatial profileを再解決
+4) AudioContext sinkを安全にDefaultへ切替
+5) chrome.storage側もruntime patchで更新
+6) spatial:fallback / spatial:device-changeイベントを発行
+
+Device labelから正確な音響特性を「取得した」とは扱わない。
+labelはRegistry候補選択にだけ使い、不明時はlegacy device categoryからGenericへFallbackする。
+
+API検証メモ（2026-09-25確認）:
+Chrome for Developersによれば AudioContext.setSinkId() はChrome 110+。
+MediaDevices.selectAudioOutput() はMDN上で限定対応/実験的機能として扱われるため、
+本実装は必須依存にしていない。
+
+==================================================
+7. CPU / RAMへの影響
+==================================================
+測定済みCPU%/RAM MBの数値はこの環境では提示しない。
+
+設計上の低負荷策:
+- Spatial OFF時はWet ingressを切断。Dry unity pathのみ残す。
+- ON時のみWetグラフへ音声が流れる。
+- 新規DSPはnative Gain/Biquad/Delay/Splitter/Merger中心。
+- audio callback内に独自JS処理を追加していない。
+- 新規AudioWorkletを追加していない。今回の処理はnative nodesで成立し、
+  独自callback/毎quantum allocationを増やさない方を優先した。
+- Scene連携のSpatial再適用は最低250ms間隔で制限。
+- parameter変更はAudioParam rampを使用。
+
+OFF時にもSpatial Node object自体は存在するが、重いWet信号処理枝は切断される。
+
+==================================================
+8. 追加Latency
+==================================================
+Direct full-band dry/wet基幹経路には意図的なserial delayを追加していない。
+Diagnosticsの "Spatial Added Latency" はこの意味で0.00 ms* と表示し、
+「実測I/O latency 0ms」とは表記しない。
+
+空間cueとして並列/Side枝に短いdelayを持つ。
+参照モデル例:
+- Generic Headphone / NATURAL: side cue 約0.119 ms
+- Generic Stereo Speaker / WIDE: side cue 約0.088 ms
+- early reflection: 約8～12 msレンジ
+
+これらは空間生成用の枝delayであり、デバイスI/O latencyの実測値ではない。
+実機全体latencyは既存Diagnostics + Chrome/OS/デバイス側を含めて別途実測する。
+
+==================================================
+9. テスト結果
+==================================================
+A. tests/spatial-regression.test.js : PASS
+- 旧3.1.4 SETTINGS_KEYSのdefault値が全て一致
+- 全旧presetの旧settings値が一致
+- 既にSpatial ONの場合、preset変更後もSpatial ON/mode/profile/output IDを保持
+- Spatial OFF時のeffective output算出がbaselineと一致
+- Device Registry matching
+- existing HRTF guard
+- bounded cue/crossfeed/reflection
+
+B. tests/spatial-web-audio-mock.test.js : PASS
+- OFF dry=1 / wet=0
+- Dry本線を維持
+- ON時Wetを再接続
+- ON/OFF equal-power target
+- OFF後Wet枝切断
+- no-double-HRTF status
+
+C. tests/static-integration.test.js : PASS
+- module script wiring
+- signal ordering
+- Spatial前後のSafety順序
+- dry bypass invariant
+- devicechange / sinkchange
+- 出力選択でgetUserMediaを使わない
+- 新Spatial modulesに外部CDN/http/eval/new Functionなし
+
+D. JavaScript syntax : PASS
+- package root *.js
+- tests/*.js
+を node --check で確認。
+
+E. manifest.json parse : PASS
+
+F. Linear reference-model simulation : PASS
+注: Chrome/Web Audio実測ではなく、実装パラメータを用いた独立数値参照モデル。
+
+確認PASS:
+- headphone/speaker peak < 1.0
+- L/R balance guard
+- extreme phase inversion guard
+- mono compatibility guard
+- DC guard
+- high-frequency overboost guard
+
+参照値（テスト信号依存、性能保証値ではない）:
+Headphone:
+  peak 0.3273
+  L/R balance 0.645 dB
+  correlation -0.0839
+  mono ratio 0.6774
+  HF energy delta -0.751 dB
+Speaker:
+  peak 0.3345
+  L/R balance 0.620 dB
+  correlation -0.1495
+  mono ratio 0.6527
+  HF energy delta -0.527 dB
+
+新Spatial layerはnative linear nodesのみで、意図的なnonlinear harmonic generatorは追加していない。
+ただし「extension全体のTHD+Nが何dB」といった数値は実ブラウザ/デバイス測定なしには主張しない。
+
+G. GIRO/YURIKA MCP CPU-only final audit
+- 必須条件違反: 0
+- possible conflicts: 0
+- unsupported claims: 0（提示した実装/テスト事実の範囲）
+- 45B modelは本作業では使用していない
+注: MCP review自体はZIP内コードを実行していないため、上記A～Fの実テストを一次判定とする。
+
+==================================================
+10. Neutral回帰試験
+==================================================
+既存3.1.4内部preset名は "flat"。
+互換性を壊さないため内部valueは変更せず、UI表示を "Neutral (Flat)" とした。
+
+確認:
+- baseline 3.1.4と旧settings値一致 : PASS
+- lowCut 5Hz透明bypass sentinelを変更していない : PASS（コード差分上）
+- Spatial default OFF : PASS
+- Spatial OFF effective output算出 baseline一致 : PASS
+- preset切替がSpatial独立設定を上書きしない : PASS
+
+したがって「Neutral本体を3D化」していない。
+Spatial ON時だけNeutral/Flat後段の独立Spatial Layerが有効になる。
+
+==================================================
+11. Self-DAP回帰試験
+==================================================
+Self-DAP core fileは変更していない。
+既存Self-DAP presetについて旧3.1.4の全legacy setting値との回帰比較 : PASS。
+SpatialはPRESET_AUDIO_KEYS外の独立設定なので、Self-DAPと併用可能。
+Spatial ONの状態でSelf-DAP presetへ変更してもSpatial ON/mode/profile/output設定を保持する試験 : PASS。
+
+Signal order上もSelf-DAPを含む既存上流DSPの後にSpatialを置いており、
+Self-DAPアルゴリズムそのものを置換していない。
+
+==================================================
+12. Chromeでの実機確認手順
+==================================================
+この項目だけは配布先Windows/Chrome + 実出力機器で実施する。
+
+1) ZIPを展開し chrome://extensions を開く。
+2) Developer modeをON。
+3) 「パッケージ化されていない拡張機能を読み込む」でmanifest.jsonのあるフォルダを指定。
+4) 拡張のエラー欄にCSP/script load errorが無いことを確認。
+5) YouTube等、既存YURIKAの通常試験ソースを再生。
+6) YURIKAをON、Neutral (Flat) + 3D SPATIAL OFFにする。
+7) 3.1.4 baselineと同じ音量条件で、ノイズ/片ch/dropout/定位ずれが無いことを確認。
+8) Clean / Music / Voice / Night / Studio / Immersive / Self-DAPを順に変更し、
+   3D OFFで既存挙動が維持されることを確認。
+9) 3D SPATIALをON。ON/OFFを数十回切替し、click/pop/瞬間muteが無いことを確認。
+10) AUTO / NATURAL / WIDE / DEEPを切替。音量ジャンプが不自然でないことを確認。
+11) Headphone/IEMでcenter vocal、bass center、左右、奥行き、高域の不自然な位相感を確認。
+12) Speakerへ切替。Headphone的なcrossfeed/binaural違和感が出ないことを確認。
+13) 「出力を選択」が使えるChromeではBluetooth headphoneなどを明示選択。
+14) Bluetooth headphone -> PC speaker等へ実際に切替し、音切れ/無音固定が無いことを確認。
+15) 選択deviceを外し、Default fallbackして再生継続することを確認。
+16) Chromeを再起動し、Spatial ON/OFF / mode / profile / output設定の復元を確認。
+17) 保存deviceIdが無効ならDefaultへ戻ることを確認。
+18) DiagnosticsでSpatial状態、Mode、Output、Profile、Channels/SR、HRTF、Strength、
+    Depth/Width/Elevation、ITD/ILD、Reflection、Crosstalk、Gain Compensation、Headroom、Fallbackを確認。
+19) DiagnosticsのAdded Latency 0.00ms*を「I/O実測ゼロ」と誤読しないこと。
+20) Chrome DevTools Performance/Task ManagerでSpatial OFF/ONのCPU/RAM差を実測。
+21) 必要ならloopback/オーディオIFでOFF/ONのfrequency response / phase / latency /
+    crosstalk / mono compatibility / inter-channel correlation / peak / RMS/LUFS / THD+Nを測定。
+22) 実測結果を採用する場合だけ製品Diagnostics/品質レポートの「measured」数値として扱う。
+
+==================================================
+13. UI / GIROイベント
+==================================================
+内部イベント:
+- spatial:on
+- spatial:off
+- spatial:device-change
+- spatial:fallback
+
+service-worker経由でpopupへ中継する。
+現時点では大量の新規キャラクター台詞を追加していない。
+将来GIRO側でイベントを購読し、出力変更/Spatial状態に応じた反応を追加できる。
+
+==================================================
+14. Diagnosticsの意味
+==================================================
+Spatial専用項目の多くは「設定値/計算値/推定値」。
+既存のpeak / RMS / correlation等は既存測定系から来る。
+
+特に以下を実測と偽らない:
+- Device Profile acoustic response
+- estimated Spatial Crosstalk
+- Spatial Added Latencyのdevice I/O値
+- Localization性能
+- THD+N
+- LUFS一致精度
+
+==================================================
+15. 既知の制約 / 将来拡張
+==================================================
+今回未実装または将来用:
+- AI Stem Separation（本機能は知覚的音像分離のみ）
+- 個人HRTF / Ear Scan HRTF
+- Room Calibration
+- Speaker Calibration
+- 強いCrosstalk Cancellation
+- 5.1 / 7.1 native input routing
+- メーカー公式Profile取得/Hub共有
+- 実測device acoustic database
+
+Registry / engine / diagnosticsを別ファイルに分離しているため、上記を既存DSPへ
+直書きせず拡張できる構造にしてある。
+
+==================================================
+16. Integrity
+==================================================
+現行配布物の整合性は SHA256_PRODUCT.json を使用する。
+SHA256_V3.json は旧V3 RC由来のhistorical snapshotとして内容を変更せず保持する。
+SHA256_PRODUCT.jsonは3.2.0 package生成直前に全ファイルを再計算する。
+
+==================================================
+3.2.1 ADDENDUM — SONOBUS REMOTE MOBILE / LOW LATENCY
+==================================================
+
+Added persisted Final Output target:
+- local
+- sonobus-mobile-headphones
+- sonobus-mobile-speaker
+
+SonoBus → Smartphone Headphones/IEM:
+- Uses the existing YURIKA dataset-free parametric HRTF stage automatically while 3D Spatial is ON.
+- No downloaded/personal HRTF impulse-response dataset is required.
+- This is a generic parametric binaural renderer, NOT individualized ear-scan HRTF.
+- Dedicated remote-mobile spatial profile keeps early reflections <= 0.010 and ITD/side cue delay sub-millisecond.
+- Headphone correction is NOT automatically applied to the unknown remote headphone/IEM model.
+- AudioContext requests latencyHint=interactive and 48 kHz for remote targets, with browser fallback.
+- Diagnostics expose AudioContext baseLatency/outputLatency when available. SonoBus network/jitter latency remains external and unmeasured by the browser.
+
+SonoBus → Smartphone Speaker:
+- Uses a conservative remote smartphone speaker profile.
+- Binaural HRTF/crossfeed is not applied.
+
+Detection boundary:
+Chrome/Web Audio cannot identify the remote SonoBus peer or know whether the smartphone is currently feeding headphones versus its built-in speaker. The user selects Final Output once and the choice persists. Explicit local output labels containing SonoBus can be recognized by the registry, but generic virtual-cable names are not assumed to mean a smartphone route.
+
+Low-latency policy:
+The direct full-band Spatial branch remains free of a fixed serial delay. Cue delays remain side/parallel spatial cues. Browser AudioContext latency and SonoBus network/jitter buffers are separate latency domains and are not reported as zero.
+
+Regression checks added:
+- remote-mobile-sonobus.test.js
+- dataset-free remote profile resolution
+- remote binaural HRTF auto-arm source contract
+- remote speaker HRTF prohibition
+- sub-ms cue bound
+- conservative reflection bound
+- interactive / 48 kHz context request presence

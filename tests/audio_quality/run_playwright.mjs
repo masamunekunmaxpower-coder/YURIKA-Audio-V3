@@ -88,7 +88,12 @@ try {
     { timeout: 30_000 }
   );
 
-  const profiles = ["neutral", "clean", "music", "selfdap"];
+  const profiles = await page.evaluate(() =>
+    typeof globalThis.getYurikaQualityProfiles === "function"
+      ? globalThis.getYurikaQualityProfiles()
+      : ["neutral", "clean", "music", "selfdap"]
+  );
+  fs.writeFileSync(path.join(outDir, "profiles.json"), JSON.stringify(profiles, null, 2));
 
   for (const profile of profiles) {
     console.log(`[YURIKA] Rendering ${profile}...`);
@@ -143,7 +148,7 @@ try {
   }
 
   console.log(
-    "[YURIKA] All four profiles rendered with synchronized references."
+    "[YURIKA] All supported profiles rendered with synchronized references."
   );
 } catch (error) {
   const failure = {

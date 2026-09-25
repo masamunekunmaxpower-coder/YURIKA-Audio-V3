@@ -3,12 +3,13 @@
 const { DEFAULTS, sanitizeSettings } = globalThis.YurikaAudioCore;
 const AdaptiveV29 = globalThis.YurikaAdaptiveV29;
 const HeadphoneProfiles = globalThis.YurikaHeadphoneProfiles;
+const SpatialProfiles = globalThis.YurikaSpatialDeviceProfiles;
 
 const ids = [
   "enabled","preset","lowCutHz","bassDb","warmthDb","clarityDb","airDb","outputDb","compressor",
   "detail","width","reality","noiseReduction","spectralFill","hiResMode","dapMode","dapStrength",
   "selfDapEnabled","selfDapStrength","selfDapRestoration","selfDapRestorationCutoffKhz",
-  "perspectiveEnabled","perspectiveDepth","adaptiveSafetyEnabled",
+  "perspectiveEnabled","perspectiveDepth","spatialEnabled","spatialMode","spatialDeviceProfile","spatialOutputTarget","adaptiveSafetyEnabled",
   "sceneEnabled","sceneStrength","sceneExponent","sceneInertia","sparkEnabled","sparkAmount","impactEnabled","impactAmount","seamNaturalizerEnabled","seamNaturalizerAmount","transientValleyEnabled","transientValleyAmount","transientEdgeEnabled","transientEdgeAmount","transientEdgeTone","orbitKeeperEnabled","deviceProfile","multiSpeakerEnabled","multiSpeakerAmount",
   "voiceMaterialEnabled","voiceMaterialAmount","voiceDepthMode","voiceTransparency","voiceAir","headphoneCorrectionEnabled","headphoneModel","headphoneCorrectionStrength","headphoneCalibrationEnabled","headphoneCalibrationStrength","hrtfEnabled","hrtfProfile","hrtfAmount","spatialTelemetryEnabled","reflectionCharacterEnabled","reflectionCharacterAmount","reflectionCharacterMode","avSyncEnabled","avSyncDelayMs",
   "dacMatrixMode","dacMatrixStrength","dacAkmWeight","dacEssWeight","dacTiWeight",
@@ -25,7 +26,9 @@ const diagEl = {
   peak: document.getElementById("diagPeak"), rms: document.getElementById("diagRms"), corr: document.getElementById("diagCorr"),
   stereo: document.getElementById("diagStereo"), trim: document.getElementById("diagTrim"), limiter: document.getElementById("diagLimiter"),
   autoLevel: document.getElementById("diagAutoLevel"), sparkGain: document.getElementById("diagSparkGain"), impact: document.getElementById("diagImpact"), compEscape: document.getElementById("diagCompEscape"), seam: document.getElementById("diagSeam"), valley: document.getElementById("diagValley"), edge: document.getElementById("diagEdge"), voice: document.getElementById("diagVoice"), headphone: document.getElementById("diagHeadphone"), orbit: document.getElementById("diagOrbit"), effectiveGain: document.getElementById("diagEffectiveGain"),
-  supervisor: document.getElementById("diagSupervisor"), scene: document.getElementById("diagScene"), device: document.getElementById("diagDevice"), itd:document.getElementById("diagItd"),ild:document.getElementById("diagIld"),iacc:document.getElementById("diagIacc"),localization:document.getElementById("diagLocalization"),hrtfCue:document.getElementById("diagHrtfCue"),avSync:document.getElementById("diagAvSync"),sessions:document.getElementById("diagSessions")
+  supervisor: document.getElementById("diagSupervisor"), scene: document.getElementById("diagScene"), device: document.getElementById("diagDevice"),
+  spatialOn:document.getElementById("diagSpatialOn"), spatialMode:document.getElementById("diagSpatialMode"), spatialOutput:document.getElementById("diagSpatialOutput"), spatialProfile:document.getElementById("diagSpatialProfile"), spatialIo:document.getElementById("diagSpatialIo"), spatialHrtf:document.getElementById("diagSpatialHrtf"), spatialStrength:document.getElementById("diagSpatialStrength"), spatialShape:document.getElementById("diagSpatialShape"), spatialElevation:document.getElementById("diagSpatialElevation"), spatialCues:document.getElementById("diagSpatialCues"), spatialReflection:document.getElementById("diagSpatialReflection"), spatialCrosstalk:document.getElementById("diagSpatialCrosstalk"), spatialLatency:document.getElementById("diagSpatialLatency"), spatialGain:document.getElementById("diagSpatialGain"), spatialHeadroom:document.getElementById("diagSpatialHeadroom"), spatialFallback:document.getElementById("diagSpatialFallback"),
+  itd:document.getElementById("diagItd"),ild:document.getElementById("diagIld"),iacc:document.getElementById("diagIacc"),localization:document.getElementById("diagLocalization"),hrtfCue:document.getElementById("diagHrtfCue"),avSync:document.getElementById("diagAvSync"),sessions:document.getElementById("diagSessions")
 };
 const RANGE_KEYS = new Set(["bassDb","warmthDb","clarityDb","airDb","outputDb","detail","width","reality","noiseReduction","spectralFill","dapStrength","selfDapStrength","perspectiveDepth",
   "sceneStrength","sceneExponent","sceneInertia","sparkAmount","impactAmount","seamNaturalizerAmount","transientValleyAmount","transientEdgeAmount","reflectionCharacterAmount","avSyncDelayMs","voiceMaterialAmount","voiceTransparency","voiceAir","headphoneCorrectionStrength","headphoneCalibrationStrength","hrtfAmount","multiSpeakerAmount","dacMatrixStrength","dacAkmWeight","dacEssWeight","dacTiWeight","roomAmount","integrityStrength","autoLevelTargetDbfs","djCrossfader","djAutoMixSeconds","deckAGainDb","deckBGainDb","deckALowDb","deckAMidDb","deckAHighDb","deckBLowDb","deckBMidDb","deckBHighDb","cartridgeMixA","cartridgeMixB","cartridgeMixC"]);
@@ -61,6 +64,7 @@ function render(settings) {
     else el[key].value = String(value);
   }
   updateOutputs();
+  updateAvSyncUi();
 }
 
 function updateOutputs() {
@@ -69,6 +73,15 @@ function updateOutputs() {
   const expOut=document.getElementById("sceneExponentOut"); if(expOut) expOut.textContent=Number(el.sceneExponent.value).toFixed(2);
   const target=document.getElementById("autoLevelTargetDbfsOut"); if(target)target.textContent=`${Number(el.autoLevelTargetDbfs.value).toFixed(1)} dBFS`;
   const mixSeconds=document.getElementById("djAutoMixSecondsOut"); if(mixSeconds)mixSeconds.textContent=`${Number(el.djAutoMixSeconds.value).toFixed(1)} s`;
+}
+
+function updateAvSyncUi(){
+  if(!el.avSyncDelayMs)return;
+  const enabled=Boolean(uiState.avSyncEnabled);
+  el.avSyncDelayMs.disabled=!enabled;
+  el.avSyncDelayMs.setAttribute("aria-disabled",String(!enabled));
+  const label=el.avSyncDelayMs.closest("label");
+  if(label)label.style.opacity=enabled?"1":"0.62";
 }
 
 function updateLocalField(key) {
@@ -81,6 +94,7 @@ function updateLocalField(key) {
     else el[key].value = String(next[key]);
   }
   updateOutputs();
+  if(key==="avSyncEnabled"||key==="avSyncDelayMs")updateAvSyncUi();
   return next[key];
 }
 
@@ -105,7 +119,7 @@ async function flushField(key) {
       else if (el[key]) el[key].value = String(uiState[key]);
       updateOutputs();
     }
-    if (key === "hiResMode" || key === "selfDapEnabled" || key === "perspectiveEnabled" || key === "dapMode" || key === "sceneEnabled" || key === "sparkEnabled" || key === "impactEnabled" || key === "seamNaturalizerEnabled" || key === "transientValleyEnabled" || key === "transientEdgeEnabled" || key === "transientEdgeTone" || key === "voiceMaterialEnabled" || key === "voiceDepthMode" || key === "headphoneCorrectionEnabled" || key === "headphoneModel" || key === "hrtfEnabled" || key === "hrtfProfile" || key === "spatialTelemetryEnabled" || key === "reflectionCharacterEnabled" || key === "reflectionCharacterMode" || key === "avSyncEnabled" || key === "orbitKeeperEnabled" || key === "deviceProfile" || key === "multiSpeakerEnabled") await refreshStatus();
+    if (key === "hiResMode" || key === "spatialEnabled" || key === "spatialMode" || key === "spatialDeviceProfile" || key === "spatialOutputTarget" || key === "selfDapEnabled" || key === "perspectiveEnabled" || key === "dapMode" || key === "sceneEnabled" || key === "sparkEnabled" || key === "impactEnabled" || key === "seamNaturalizerEnabled" || key === "transientValleyEnabled" || key === "transientEdgeEnabled" || key === "transientEdgeTone" || key === "voiceMaterialEnabled" || key === "voiceDepthMode" || key === "headphoneCorrectionEnabled" || key === "headphoneModel" || key === "hrtfEnabled" || key === "hrtfProfile" || key === "spatialTelemetryEnabled" || key === "reflectionCharacterEnabled" || key === "reflectionCharacterMode" || key === "avSyncEnabled" || key === "orbitKeeperEnabled" || key === "deviceProfile" || key === "multiSpeakerEnabled") await refreshStatus();
     return result;
   });
 }
@@ -166,7 +180,11 @@ function renderDiagnostics(s) {
   if (diagEl.seam) diagEl.seam.textContent = Number.isFinite(Number(s?.seamConfidence)) ? `${Number(s.seamConfidence).toFixed(3)} / ${Number(s.seamEvents||0)}` : "0.000";
   if (diagEl.valley) diagEl.valley.textContent = Number.isFinite(Number(s?.transientValleyDepthDb)) ? `-${Number(s.transientValleyDepthDb).toFixed(3)} dB / ${Number(s.transientValleyTriggers||0)}` : "0.000 dB";
   if (diagEl.edge) diagEl.edge.textContent = Number.isFinite(Number(s?.transientEdgeWet)) ? `${Number(s.transientEdgeWet).toFixed(4)} / ${Number(s.transientEdgeTriggers||0)}` : "0.0000";
-  if (diagEl.voice) diagEl.voice.textContent = Number.isFinite(Number(s?.voiceConfidence)) ? `${Number(s.voiceConfidence).toFixed(3)} / syn ${Number(s.voiceSyntheticTendency||0).toFixed(3)}` : "0.000";
+  if (diagEl.voice) {
+    const stable=Number(s?.voiceConfidence), raw=Number(s?.voiceConfidenceRaw), syn=Number(s?.voiceSyntheticTendency), synRaw=Number(s?.voiceSyntheticTendencyRaw);
+    diagEl.voice.textContent=Number.isFinite(stable)?`${stable.toFixed(3)} / syn ${Number.isFinite(syn)?syn.toFixed(3):"0.000"}`:"0.000";
+    diagEl.voice.title=Number.isFinite(raw)?`Raw Voice ${raw.toFixed(3)} / Raw synthetic ${Number.isFinite(synRaw)?synRaw.toFixed(3):"0.000"}`:"";
+  }
   if (diagEl.headphone) diagEl.headphone.textContent = s?.deviceProfile === "headphone" ? `${s.headphoneModel || "generic"}${s.headphoneCalibrationEnabled ? " / CAL" : ""}${s.hrtfEnabled ? ` / HRTF ${s.hrtfProfile}` : ""}` : "inactive"; const hpState=document.getElementById("headphoneAutoState"); if(hpState)hpState.textContent=`Output: ${s?.headphoneOutputLabel||"not selected"} / sink:${s?.headphoneOutputSinkApplied?"active":(s?.headphoneOutputDeviceSelected?"selected":"default")} / calibration:${s?.headphoneCalibrationEnabled?"measurement":"profile only"}`;
   if (diagEl.orbit) diagEl.orbit.textContent = Number.isFinite(Number(s?.orbitHealthScore)) ? `${Number(s.orbitHealthScore).toFixed(0)} / L${Number(s.orbitLevel||0)}${s?.orbitDegraded ? " SAFE" : ""}` : "--";
   const sm=s?.spatialMetrics||{};
@@ -174,14 +192,47 @@ function renderDiagnostics(s) {
   if(diagEl.ild)diagEl.ild.textContent=Number.isFinite(Number(sm.ildDb))?`${Number(sm.ildDb).toFixed(2)} dB`:"--";
   if(diagEl.iacc)diagEl.iacc.textContent=Number.isFinite(Number(sm.iacc))?`${Number(sm.iacc).toFixed(4)}${Number.isFinite(Number(sm.iaccSigned))&&Number(sm.iaccSigned)<0?" (inv)":""}`:"--";
   if(diagEl.localization)diagEl.localization.textContent=Number.isFinite(Number(sm.localizationErrorProxyDeg))?`${Number(sm.localizationErrorProxyDeg).toFixed(1)}° proxy`:"--";
-  if(diagEl.hrtfCue)diagEl.hrtfCue.textContent=Number.isFinite(Number(sm.hrtfCueConsistency))?`${Number(sm.hrtfCueConsistency).toFixed(0)}/100`:"--";
-  if(diagEl.avSync)diagEl.avSync.textContent=Number.isFinite(Number(s?.avSyncEstimatedAudioLatencyMs))?`${Number(s.avSyncEstimatedAudioLatencyMs).toFixed(1)} ms`:"--";
+  if(diagEl.hrtfCue){
+    const stable=Number(sm.hrtfCueConsistency),raw=Number(sm.hrtfCueConsistencyRaw);
+    diagEl.hrtfCue.textContent=Number.isFinite(stable)?`${stable.toFixed(0)}/100`:"--";
+    diagEl.hrtfCue.title=Number.isFinite(raw)?`Raw HRTF cue ${raw.toFixed(1)}/100 / stable=9-report median`:"";
+  }
+  if(diagEl.avSync){
+    const total=Number(s?.avSyncEstimatedAudioLatencyMs),base=Number(s?.avSyncBaseLatencyMs),applied=Number(s?.avSyncAppliedDelayMs);
+    if(Number.isFinite(total)){
+      diagEl.avSync.textContent=Number.isFinite(applied)&&applied>0.05?`${total.toFixed(1)} ms (+${applied.toFixed(1)} A/V)`:`${total.toFixed(1)} ms`;
+      diagEl.avSync.title=Number.isFinite(base)?`Base ${base.toFixed(1)} ms / Applied A/V delay ${Number.isFinite(applied)?applied.toFixed(1):"0.0"} ms`:"";
+    }else{diagEl.avSync.textContent="--";diagEl.avSync.title="";}
+  }
   if(diagEl.sessions)diagEl.sessions.textContent=`${Number(s?.sessionCount||0)} / ${Number(s?.maxSessions||1)}`;
   if (diagEl.effectiveGain) diagEl.effectiveGain.textContent = Number.isFinite(Number(s?.effectiveLevelDb)) ? `${Number(s.effectiveLevelDb).toFixed(3)} dB` : "0.000 dB";
   const sup = s?.safetyMeterAvailable ? (s?.safetyFaultLatched ? "MUTED / recovery" : "ACTIVE") : "fallback";
   diagEl.supervisor.textContent = `${sup}${Number(s?.runtimeRecoveries || 0) ? ` / rec ${s.runtimeRecoveries}` : ""}`;
   if (diagEl.scene) diagEl.scene.textContent = s?.scenePatternId === null || s?.scenePatternId === undefined ? "--" : `#${s.scenePatternId} / A${String(s.sceneAccent ?? 0).padStart(2,"0")}`;
   if (diagEl.device) diagEl.device.textContent = s?.deviceProfile || "stereo";
+  const sp=s?.spatial3d||{};
+  if(diagEl.spatialOn)diagEl.spatialOn.textContent=sp.enabled?"ON":"OFF";
+  if(diagEl.spatialMode)diagEl.spatialMode.textContent=sp.mode||"--";
+  if(diagEl.spatialOutput)diagEl.spatialOutput.textContent=sp.outputDevice||"Default";
+  if(diagEl.spatialProfile)diagEl.spatialProfile.textContent=sp.resolvedDeviceProfile||"--";
+  if(diagEl.spatialIo)diagEl.spatialIo.textContent=Number.isFinite(Number(sp.sampleRate))?`${Number(sp.outputChannels||0)}ch / ${(Number(sp.sampleRate)/1000).toFixed(1)} kHz`:`${Number(sp.outputChannels||0)}ch / --`;
+  if(diagEl.spatialHrtf)diagEl.spatialHrtf.textContent=sp.hrtfProfile||"--";
+  if(diagEl.spatialStrength)diagEl.spatialStrength.textContent=Number.isFinite(Number(sp.spatialStrength))?Number(sp.spatialStrength).toFixed(3):"--";
+  if(diagEl.spatialShape)diagEl.spatialShape.textContent=Number.isFinite(Number(sp.width))?`${Number(sp.width).toFixed(3)} / ${Number(sp.depth||0).toFixed(3)}`:"--";
+  if(diagEl.spatialElevation)diagEl.spatialElevation.textContent=Number.isFinite(Number(sp.elevation))?Number(sp.elevation).toFixed(3):"--";
+  if(diagEl.spatialCues)diagEl.spatialCues.textContent=Number.isFinite(Number(sp.itdAmountMs))?`${Number(sp.itdAmountMs).toFixed(3)} ms / ${Number(sp.ildAmountDb||0).toFixed(2)} dB`:"--";
+  if(diagEl.spatialReflection)diagEl.spatialReflection.textContent=Number.isFinite(Number(sp.earlyReflection))?Number(sp.earlyReflection).toFixed(4):"--";
+  if(diagEl.spatialCrosstalk)diagEl.spatialCrosstalk.textContent=Number.isFinite(Number(sp.estimatedSpatialCrosstalk))?Number(sp.estimatedSpatialCrosstalk).toFixed(4):"--";
+  if(diagEl.spatialLatency){
+    const dsp=Number.isFinite(Number(sp.addedLatencyMs))?`${Number(sp.addedLatencyMs).toFixed(2)} ms DSP`:"--";
+    const base=Number.isFinite(Number(sp.audioContextBaseLatencyMs))?` / base ${Number(sp.audioContextBaseLatencyMs).toFixed(2)} ms`:"";
+    diagEl.spatialLatency.textContent=`${dsp}${base}`;
+    diagEl.spatialLatency.title=sp.transportLatencyKind||"";
+  }
+  if(diagEl.spatialGain)diagEl.spatialGain.textContent=Number.isFinite(Number(sp.gainCompensationDb))?`${Number(sp.gainCompensationDb).toFixed(2)} dB`:"--";
+  if(diagEl.spatialHeadroom)diagEl.spatialHeadroom.textContent=Number.isFinite(Number(sp.peakHeadroomDb))?`${Number(sp.peakHeadroomDb).toFixed(2)} dB`:"--";
+  if(diagEl.spatialFallback)diagEl.spatialFallback.textContent=sp.fallbackStatus||"none";
+  const spatialState=document.getElementById("spatialOutputState");if(spatialState)spatialState.textContent=`Target: ${sp.outputTarget||uiState.spatialOutputTarget||"local"} / PC Output: ${sp.outputDevice||"Default"} / Profile: ${sp.resolvedDeviceProfile||uiState.spatialDeviceProfile||"auto"}${sp.sinkError?` / fallback: ${sp.sinkError}`:""}`;
 }
 
 async function refreshStatus() {
@@ -218,10 +269,10 @@ async function refreshStatus() {
       const hp = s.deviceProfile === "headphone" && s.headphoneCorrectionEnabled ? ` / HP ${s.headphoneModel || "generic"}${s.headphoneCalibrationEnabled?"+CAL":""}` : "";
       const hrtf = s.deviceProfile === "headphone" && s.hrtfEnabled ? ` / HRTF ${s.hrtfProfile || "natural"}` : "";
       const orbit = s.orbitKeeperEnabled ? ` / ORBIT L${Number(s.orbitLevel || 0)}` : "";
-      const spatial=s.spatialMetricsAvailable?` / SPAT ${s.schedulerTier||"?"}`:""; const refl=s.reflectionCharacterEnabled?` / REFL ${Number(s.reflectionCharacterAmount||0).toFixed(0)}`:""; const sessions=Number(s.sessionCount||0)>1?` / TABS ${s.sessionCount}`:"";
+      const spatTelemetry=s.spatialMetricsAvailable?` / SPAT-MET ${s.schedulerTier||"?"}`:""; const spatial3d=s.spatial3d?.enabled?` / 3D ${String(s.spatial3d.mode||"auto").toUpperCase()} ${s.spatial3d.resolvedDeviceProfile||"auto"}`:""; const refl=s.reflectionCharacterEnabled?` / REFL ${Number(s.reflectionCharacterAmount||0).toFixed(0)}`:""; const sessions=Number(s.sessionCount||0)>1?` / TABS ${s.sessionCount}`:"";
       const device = s.deviceProfile && s.deviceProfile !== "stereo" ? ` / OUT ${s.deviceProfile}` : "";
       const multi = s.multiSpeakerEnabled ? ` / VMS ${Number(s.multiSpeakerAmount || 0).toFixed(0)}` : "";
-      statusEl.textContent = `DSP ON / ${rate}${hi}${nr}${dap}${selfDap}${perspective}${dm}${room}${scene}${spark}${impact}${seam}${valley}${edge}${voice}${hp}${hrtf}${orbit}${spatial}${refl}${sessions}${device}${multi}${al}${lim}${trim}${input}${autoMix}`;
+      statusEl.textContent = `DSP ON / ${rate}${hi}${nr}${dap}${selfDap}${perspective}${dm}${room}${scene}${spark}${impact}${seam}${valley}${edge}${voice}${hp}${hrtf}${orbit}${spatTelemetry}${spatial3d}${refl}${sessions}${device}${multi}${al}${lim}${trim}${input}${autoMix}`;
       const deckState=document.getElementById("deckState"); if(deckState) deckState.textContent=`A: ${s.deckAActive?"ON":"--"} / B: ${s.deckBActive?"ON":"--"}`;
     }
   } catch {
@@ -293,6 +344,22 @@ for (const [id,direction] of [["autoMixAB","A_TO_B"],["autoMixBA","B_TO_A"]]) {
 }
 
 
+async function chooseSpatialOutput(){
+  if(!navigator?.mediaDevices)throw new Error("MediaDevices API unavailable");
+  let d=null;
+  if(typeof navigator.mediaDevices.selectAudioOutput==="function") d=await navigator.mediaDevices.selectAudioOutput();
+  else {
+    const devices=(await navigator.mediaDevices.enumerateDevices()).filter(x=>x.kind==="audiooutput"&&x.label);
+    if(devices.length===1)d=devices[0];
+    else throw new Error("出力選択APIが使えません。マイク権限は要求せずDefault出力へFallbackします。");
+  }
+  const match=SpatialProfiles?.resolve?.({requestedProfile:"auto",outputTarget:uiState.spatialOutputTarget||"local",label:d?.label||"",legacyDeviceProfile:uiState.deviceProfile})||{profileId:"generic-stereo-speaker",confidence:0,reason:"registry-unavailable"};
+  const patch={spatialOutputDeviceId:d?.deviceId||"",spatialOutputLabel:d?.label||"",spatialDeviceProfile:uiState.spatialDeviceProfile==="auto"?"auto":uiState.spatialDeviceProfile};
+  const r=await send("APPLY_PATCH",{patch});if(!r?.ok)throw new Error(r?.error||"spatial output apply failed");if(r.settings)render(r.settings);
+  const st=document.getElementById("spatialOutputState");if(st)st.textContent=`Output: ${d?.label||"unnamed"} / Auto match: ${match.profileId} / confidence ${Number(match.confidence||0).toFixed(2)}`;
+  await refreshStatus(); return{device:d,match};
+}
+
 async function chooseHeadphoneOutput(){
   if(!navigator?.mediaDevices)throw new Error("MediaDevices API unavailable");
   let d=null;
@@ -350,6 +417,9 @@ async function refreshTabSessions(){
 }
 const refreshTabs=document.getElementById("refreshTabs");if(refreshTabs)refreshTabs.addEventListener("click",()=>void refreshTabSessions());
 
+
+const spatialSelectOutput=document.getElementById("spatialSelectOutput");if(spatialSelectOutput)spatialSelectOutput.addEventListener("click",()=>void enqueueUiAction(async()=>{spatialSelectOutput.disabled=true;try{await chooseSpatialOutput();}catch(e){statusEl.textContent=e?.message||String(e);}finally{spatialSelectOutput.disabled=false;}}));
+chrome.runtime.onMessage.addListener((message)=>{if(message?.target!=="popup"||message?.type!=="SPATIAL_EVENT")return false;try{window.dispatchEvent(new CustomEvent(message.event||"spatial:event",{detail:message.detail||{}}));}catch{}return false;});
 
 const autoHp=document.getElementById("autoDetectHeadphone");if(autoHp)autoHp.addEventListener("click",()=>void enqueueUiAction(async()=>{autoHp.disabled=true;try{await chooseHeadphoneOutput();}catch(e){statusEl.textContent=e?.message||String(e);}finally{autoHp.disabled=false;}}));
 const hpTest=document.getElementById("headphoneTestTone");if(hpTest)hpTest.addEventListener("click",()=>void enqueueUiAction(async()=>{hpTest.disabled=true;try{await playTestSignal();}catch(e){statusEl.textContent=e?.message||String(e);}finally{hpTest.disabled=false;}}));

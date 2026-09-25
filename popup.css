@@ -41,3 +41,6 @@ button:active { transform:translateY(1px); }
 .cartridge-grid legend { font-size:9px; color:#9fd6ff; }
 .cartridge-grid label { display:block; font-size:8px; color:#9ca8b9; margin:3px 0; }
 .cartridge-grid input[type="number"] { width:100%; background:#151a21; color:#eef1f6; border:1px solid #343c4b; border-radius:4px; padding:3px; font-size:9px; }
+.spatial-panel { border-top-color:#31536d; background:linear-gradient(180deg,rgba(27,63,88,.17),rgba(17,19,24,0)); padding:8px 6px 0; border-radius:8px; }
+.spatial-master { color:#ccecff !important; font-weight:700; letter-spacing:.04em; }
+#spatialOutputState { min-height:0; margin-top:8px; }

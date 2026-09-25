@@ -1,5 +1,17 @@
 "use strict";
 
+function getYurikaQualityProfiles() {
+  const C = globalThis.YurikaAudioCore;
+  const profiles = ["neutral", "clean", "music", "selfdap"];
+  if (C?.DEFAULTS && Object.prototype.hasOwnProperty.call(C.DEFAULTS, "spatialEnabled") && globalThis.YurikaSpatialEngine) {
+    profiles.push("spatial-natural");
+    if (Object.prototype.hasOwnProperty.call(C.DEFAULTS, "spatialOutputTarget")) profiles.push("sonobus-mobile");
+  }
+  return profiles;
+}
+
+globalThis.getYurikaQualityProfiles = getYurikaQualityProfiles;
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -67,6 +79,21 @@ function buildQualitySettings(profile) {
     s = { ...s, ...C.PRESETS.music, preset: "music" };
   } else if (profile === "selfdap") {
     s = { ...s, ...C.PRESETS.selfdap, preset: "selfdap" };
+  } else if (profile === "spatial-natural") {
+    s = {
+      ...s, ...C.PRESETS.music, preset:"music",
+      spatialEnabled:true, spatialMode:"natural", spatialDeviceProfile:"generic-headphone",
+      spatialOutputTarget:"local", deviceProfile:"headphone",
+      hrtfEnabled:true, hrtfProfile:"natural", hrtfAmount:42
+    };
+  } else if (profile === "sonobus-mobile") {
+    s = {
+      ...s, ...C.PRESETS.music, preset:"music",
+      spatialEnabled:true, spatialMode:"natural", spatialDeviceProfile:"auto",
+      spatialOutputTarget:"sonobus-mobile-headphones",
+      deviceProfile:"stereo", hrtfEnabled:false, hrtfAmount:0,
+      headphoneCorrectionEnabled:false
+    };
   } else {
     throw new Error(`unknown profile: ${profile}`);
   }

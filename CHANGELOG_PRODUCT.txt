@@ -1,0 +1,58 @@
+3.2.1 Remote Mobile / SonoBus Low-Latency
+
+- Added persisted Final Output target: Local / SonoBus→Smartphone Headphones-IEM / SonoBus→Smartphone Speaker.
+- SonoBus mobile headphone target automatically enables the existing dataset-free parametric HRTF path; no external HRTF dataset or cloud lookup is required.
+- Remote smartphone speaker target explicitly disables binaural HRTF behavior.
+- Remote targets request AudioContext latencyHint=interactive and 48 kHz with safe fallback; Diagnostics expose browser base/output latency separately from DSP cue delays.
+- Added conservative remote-mobile Spatial profiles with low reflections and bounded sub-ms spatial cues.
+- Remote route selection is explicit/persisted because Web Audio cannot identify a remote SonoBus peer or the phone's final headphone/speaker path.
+- Added remote-mobile regression test.
+
+3.2.0 3D Spatial Ecosystem
+- 既存DSPの後段、Auto Level / Adaptive Safety / Limiterの前へ独立3D Spatial Layerを追加。
+- Spatial OFF時はDry本線を維持し、Wet枝をフェード後に切断してCPU負荷を抑制。既存プリセット変更でもSpatial状態を保持。
+- Headphone/IEMとSpeakerで別の保守的アルゴリズムを使用し、既存HRTF有効時は二重HRTFを回避。
+- Device Profile Registry、出力デバイス選択/変更検出、default fallback、Chrome storage永続化を追加。
+- AUTO / NATURAL / WIDE / DEEP、詳細Spatial Diagnostics、GIRO向けspatial:*イベントを追加。
+- Neutral(内部preset名 flat) / Self-DAPを含む旧設定・プリセット回帰、mock Web Audio、静的統合、参照モデル検証を追加。
+- 実機Chrome/Web AudioのI/O測定値は捏造せず、手動確認手順をSPATIAL_IMPLEMENTATION_REPORT.txtへ記載。
+
+
+3.1.1 Product Polish
+- ジーロ表示を約1.2倍へ拡大し、左キャラクター領域を235px→260pxへ拡張。
+- RIMをジーロ右下へ分離し、シルエットの重なりを軽減。
+- 左中央を説明吹き出し用の余白として再調整。
+- 自作DAPの常時表示説明を短文化。詳細情報はtitleへ保持。
+- 選択中タブを上方向へ浮かせ、星アクセントを追加。
+- スクロールバーをミント系のゲームUI表現へ変更。
+- 既存DSP中核ファイルは変更なし。
+
+3.1.0 Product Edition
+- RCで修正したRIM状態セレクタ、sit点滅、音符常時アニメーション対策を維持。
+- 非表示時のrAF停止、poll整理、AudioContext初期化をユーザー操作後へ変更。
+- タブのARIA/キーボード操作、ドラッグ後誤クリック抑止を追加。
+- パネル移動境界を正確化し、ダブルクリック中央復帰を追加。
+- visual assetsをWebP化。RIMは表示解像度に合わせて縮小し軽量化。
+- SVG RIMドックを明示的な3x7=21セル意匠へ整理。
+- 製品版メタデータ/README/整合性情報を更新。
+
+V3.1.2 Product Hotfix
+- youtube-av-sync.js: extension reload/update後に古いYouTubeタブへ残ったcontent scriptが
+  "Extension context invalidated"を500msごとに発生させる問題を修正。
+- chrome.runtime.sendMessage() の同期throwをtry/catchで保護。
+- extension context消失時はtelemetry timerとvisibility listenerを自動停止。
+- DSP/補正/音響中核には変更なし。
+
+3.1.3 A/V LATENCY HOTFIX
+- Fix A/V latency diagnostics adding a saved delay even while A/V Delay compensation was OFF.
+- Split base output latency and actually-applied A/V delay in runtime diagnostics.
+- Disable the Audio delay slider while A/V Delay compensation is OFF.
+- Audio routing/DSP parameters are unchanged; only diagnostic accounting/UI guarding changed.
+
+
+3.1.4 Voice / HRTF Diagnostic Stability
+- Voice Materialの可聴DSP算出は変更せず、STATUS表示用voiceConfidenceだけattack/release平滑化。初回reportはrawをそのまま採用し、起動直後の過小表示を防止。raw値も保持。
+- HRTF cueの可聴HRTF処理・worklet算出式は変更せず、STATUS主値を直近9レポートの中央値へ安定化。raw値も保持。
+- 診断タブではGIRO側の重複STATUS poll、60Hz rAFキャラ移動、音符、歩行SEを停止する診断優先モードを追加。
+- 診断を離れると通常のキャラクター演出へ復帰。
+- 数値を固定・底上げする処理は追加していない。

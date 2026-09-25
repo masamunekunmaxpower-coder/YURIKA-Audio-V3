@@ -3,8 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>YURIKA Audio Enhancer</title>
+  <title>YURIKA Audio - GIRO MONATIUM</title>
   <link rel="stylesheet" href="popup.css">
+  <link rel="stylesheet" href="giro-character.css">
+  <link rel="preload" href="assets/monatium-bg-v3.webp" as="image" type="image/webp">
+  <link rel="preload" href="assets/rim-116-ram-companion.webp" as="image" type="image/webp">
+  <link rel="preload" href="assets/giro-poses/giro-idle.webp" as="image" type="image/webp">
 </head>
 <body>
   <main>
@@ -17,10 +21,30 @@
 
     <section class="button-grid one"><button id="openV3Guide" type="button">V3 ジーロガイドを開く</button></section>
 
+
+    <details open class="spatial-panel">
+      <summary>3D Spatial Ecosystem</summary>
+      <section class="row">
+        <label class="check spatial-master"><input id="spatialEnabled" type="checkbox"> 3D SPATIAL</label>
+        <label>Mode<select id="spatialMode"><option value="auto">AUTO</option><option value="natural">NATURAL</option><option value="wide">WIDE</option><option value="deep">DEEP</option></select></label>
+      </section>
+      <section class="row">
+        <label>Final Output<select id="spatialOutputTarget">
+          <option value="local">Local device</option><option value="sonobus-mobile-headphones">SonoBus → Smartphone Headphones/IEM</option><option value="sonobus-mobile-speaker">SonoBus → Smartphone Speaker</option>
+        </select></label>
+        <label>Device Profile<select id="spatialDeviceProfile">
+          <option value="auto">Auto</option><option value="generic-headphone">Generic Headphone</option><option value="generic-iem">Generic IEM</option><option value="generic-earbuds">Generic Earbuds</option><option value="generic-stereo-speaker">Stereo Speaker</option><option value="laptop-speaker">Laptop Speaker</option><option value="tv">TV</option><option value="bluetooth-speaker">Bluetooth Speaker</option><option value="studio-monitor">Studio Monitor</option><option value="sennheiser-hd600">HD600</option><option value="sony-wh1000xm5">WH-1000XM5</option><option value="airpods-family">AirPods family</option><option value="sonobus-mobile-binaural">SonoBus Mobile Binaural</option><option value="remote-smartphone-speaker">Remote Smartphone Speaker</option>
+        </select></label>
+        <button id="spatialSelectOutput" type="button" class="secondary">出力デバイス選択</button>
+      </section>
+      <section class="status" id="spatialOutputState">Output: Default / Profile: Auto</section>
+      <p class="note">既存DSPの後段・Safety/Limiterの前に独立追加します。OFF時は旧DSPをDry経路で通し、ON/OFFは短いequal-power遷移。SonoBus → Smartphone Headphones/IEMでは外部HRTFデータ不要の軽量パラメトリックHRTFを自動適用します。ブラウザーからSonoBusの遠隔端末そのものは検出できないため、PC側の出力先（例: 仮想オーディオ経路）は「出力デバイス選択」で指定します。</p>
+    </details>
+
     <section>
       <label class="label" for="preset">プリセット</label>
       <select id="preset">
-        <option value="flat">Flat</option><option value="clean">Clean</option><option value="music">Music</option>
+        <option value="flat">Neutral (Flat)</option><option value="clean">Clean</option><option value="music">Music</option>
         <option value="voice">Voice</option><option value="night">Night</option><option value="studio">Studio Hi-Res</option>
         <option value="immersive">Immersive</option><option value="selfdap">Self DAP Reference</option><option value="custom" hidden>Custom</option>
       </select>
@@ -92,7 +116,7 @@
         </label>
         <span></span>
       </section>
-      <p class="note">アップロードされた自作DAP設計をソフトウェアへ写像したモデルです。ADAU1452系M/S処理、Side 100Hz HPF、約200µs位相調整、スペクトル急落時の高域補完、9〜18kHz可変カットオフ、低歪みDAC/OPA1622/AB級出力段の思想を再現します。電源品質・物理ジッタ・AK4499EQそのもののアナログ特性を完全再現するものではありません。</p>
+      <p class="note self-dap-note" title="自作DAP設計をソフトウェアへ写像。ADAU1452系M/S処理、Side 100Hz HPF、約200µs位相調整、9〜18kHz可変高域補完、低歪みDAC/OPA1622/AB級出力段の設計思想を参考にしています。物理電源・ジッタ・実DACのアナログ特性そのものを再現する機能ではありません。">自作DAP設計をもとにした高域補完モデル。スペクトルの自然なつながりを優先し、9〜18 kHzを穏やかに補完します。</p>
     </details>
 
     <section class="row three">
@@ -252,7 +276,7 @@
       </section>
       <section class="row"><label class="check"><input id="avSyncEnabled" type="checkbox"> A/V Delay補正</label></section>
       <section class="sliders compact"><label>Audio delay <output id="avSyncDelayMsOut">0.0 ms</output><input id="avSyncDelayMs" type="range" min="0" max="150" step="0.1"></label></section>
-      <p class="note">Reflection Characterは壁の物理反射率を変えません。短い反射成分と帯域・トランジェントを整えて「跳ね返りが見えやすい」再生表現を作ります。A/V補正は音声が映像より先行するときだけ遅延で合わせる方式です。</p>
+      <p class="note">Reflection Characterは壁の物理反射率を変えません。A/V補正は音声が映像より先行するときだけ追加遅延で合わせます。OFF時は保存済みDelay値を実遅延・診断値へ加算しません。</p>
       <section class="status" id="cpuSchedulerState">CPU scheduler: --</section>
       <div id="multiTabList" class="diagnostics"></div>
       <button id="refreshTabs" class="secondary">YouTubeタブ一覧を更新</button>
@@ -322,12 +346,28 @@
         <div><span>Supervisor</span><output id="diagSupervisor">--</output></div>
         <div><span>Scene</span><output id="diagScene">--</output></div>
         <div><span>Device</span><output id="diagDevice">--</output></div>
+        <div><span>3D Spatial</span><output id="diagSpatialOn">OFF</output></div>
+        <div><span>Spatial Mode</span><output id="diagSpatialMode">--</output></div>
+        <div><span>Spatial Output</span><output id="diagSpatialOutput">--</output></div>
+        <div><span>Spatial Profile</span><output id="diagSpatialProfile">--</output></div>
+        <div><span>Spatial Channels / SR</span><output id="diagSpatialIo">--</output></div>
+        <div><span>Spatial HRTF</span><output id="diagSpatialHrtf">--</output></div>
+        <div><span>Spatial Strength</span><output id="diagSpatialStrength">--</output></div>
+        <div><span>Spatial Width/Depth</span><output id="diagSpatialShape">--</output></div>
+        <div><span>Spatial Elevation</span><output id="diagSpatialElevation">--</output></div>
+        <div><span>Spatial ITD/ILD</span><output id="diagSpatialCues">--</output></div>
+        <div><span>Spatial Reflection</span><output id="diagSpatialReflection">--</output></div>
+        <div><span>Spatial Crosstalk</span><output id="diagSpatialCrosstalk">--</output></div>
+        <div><span>Spatial Added Latency</span><output id="diagSpatialLatency">--</output></div>
+        <div><span>Spatial Gain Comp</span><output id="diagSpatialGain">--</output></div>
+        <div><span>Spatial Headroom</span><output id="diagSpatialHeadroom">--</output></div>
+        <div><span>Spatial Fallback</span><output id="diagSpatialFallback">--</output></div>
       </section>
-      <p class="note">L/R相関は診断用です。mono-likeは「一定時間ほぼ同一波形だった」という推定で、音源そのものが常にモノラルだと断定する表示ではありません。</p>
+      <p class="note">L/R相関は診断用です。mono-likeは「一定時間ほぼ同一波形だった」という推定で、音源そのものが常にモノラルだと断定する表示ではありません。SpatialのStrength/Width/Depth/ITD/ILD/Reflection/Headroomは設定から導出した制御値です。Peak/RMS/L/R相関は既存Diagnosticsの実測値です。Spatial Added Latencyの「0 ms*」は全信号を遅延させる直列遅延が無いという構成値で、実機I/O遅延の測定値ではありません。</p>
     </details>
 
     <p class="note">Adaptive Safetyは通常時は0 dBで音を変えず、Limiterが継続的に働く場合のみ前段を少し下げて潰れすぎを防ぎます。Hi-Resは96kHz AudioContextを要求し、倍音処理を4x oversamplingします。ブラウザはPCM処理のため真のDSD 1-bit再生ではありません。Detail/Reality/Frequency Fillは元音源に無い情報を復元せず、聴感を補正します。ノイズ抑制は静かな区間を中心に働きます。</p>
   </main>
-  <script src="modular-core.js"></script><script src="dsp-core.js"></script><script src="adaptive-v29.js"></script><script src="headphone-profiles.js"></script><script src="popup.js"></script>
+  <script src="modular-core.js"></script><script src="dsp-core.js"></script><script src="adaptive-v29.js"></script><script src="headphone-profiles.js"></script><script src="spatial-device-profiles.js"></script><script src="popup.js"></script><script src="giro-tabs.js"></script><script src="giro-character.js"></script>
 </body>
 </html>

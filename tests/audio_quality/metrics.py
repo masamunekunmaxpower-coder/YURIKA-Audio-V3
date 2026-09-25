@@ -24,7 +24,15 @@ RESULTS = Path(
     os.environ.get("YURIKA_RESULTS_DIR", HERE / "results")
 )
 
-PROFILES = ["neutral", "clean", "music", "selfdap"]
+BASE_PROFILES = ["neutral", "clean", "music", "selfdap"]
+_profiles_file = RESULTS / "profiles.json"
+if _profiles_file.exists():
+    try:
+        PROFILES = [str(x) for x in json.loads(_profiles_file.read_text(encoding="utf-8"))]
+    except Exception:
+        PROFILES = BASE_PROFILES
+else:
+    PROFILES = BASE_PROFILES
 
 SEG = {
     "silence": (0.00, 0.25),
@@ -753,7 +761,7 @@ def analyze():
 
     if len(report["profiles"]) != len(PROFILES):
         critical.append(
-            "not all four profiles produced measurements"
+            f"not all expected profiles produced measurements ({len(report['profiles'])} / {len(PROFILES)})"
         )
 
     # Deduplicate without losing order.
