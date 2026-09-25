@@ -37,6 +37,23 @@ for path in ROOT.rglob('*'):
     if path.suffix.lower()=='.html':
         if re.search(r'<script[^>]+src=["\']https?://',text,re.I): fail(f'external script CDN forbidden: {rel}')
 
+
+# Known startup helper integrity guards. These catch package-generation regressions
+# before GitHub launches Chromium.
+offscreen_path=ROOT/'offscreen.js'
+if offscreen_path.exists():
+    off=offscreen_path.read_text(encoding='utf-8-sig',errors='replace')
+    helper_checks=[
+        ('createNoiseNode', r'\b(?:async\s+)?function\s+createNoiseNode\s*\(|\bconst\s+createNoiseNode\s*='),
+        ('createSafetyMeterNode', r'\b(?:async\s+)?function\s+createSafetyMeterNode\s*\(|\bconst\s+createSafetyMeterNode\s*='),
+        ('createSparkMonitorNode', r'\b(?:async\s+)?function\s+createSparkMonitorNode\s*\(|\bconst\s+createSparkMonitorNode\s*='),
+    ]
+    for helper,def_pat in helper_checks:
+        calls=len(re.findall(rf'\b{re.escape(helper)}\s*\(',off))
+        defined=bool(re.search(def_pat,off))
+        if calls and not defined:
+            fail(f'offscreen startup helper called but not defined: {helper}')
+
 meta=ROOT/'.yurika-test-candidate.json'
 if meta.exists():
     try: notes.append(json.loads(meta.read_text(encoding='utf-8-sig')))

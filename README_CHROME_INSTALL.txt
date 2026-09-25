@@ -1,3 +1,14 @@
+YURIKA Audio GIRO MONATIUM 3.2.9
+
+3.2.9 C++ / WebAssembly DSP SDK
+- Chrome cannot execute .cpp source directly. YURIKA compiles C++ to local WebAssembly before extension load/reload.
+- Added reusable cpp-wasm-host.js + cpp-wasm-worklet.js for future C++ DSP stages.
+- Added cpp-sdk/ with ABI header, C++ example, prebuilt WASM, Windows build helper and Node self-test.
+- Existing Virtual Class-A Amp remains C++/WASM and unchanged in its audible algorithm.
+- No generic C++ module is connected to the audible path by default, so 3.2.7 sound/latency behavior is preserved.
+- Manifest V3 CSP keeps local WASM enabled via script-src 'self' 'wasm-unsafe-eval'.
+- Runtime C++ compilation is intentionally unsupported; compile .cpp to .wasm first, bundle it locally, then reload the unpacked extension.
+
 YURIKA Audio GIRO MONATIUM 3.2.7
 
 3.2.7 Internal Class-A Virtual Amplifier
@@ -77,3 +88,8 @@ VERSION
 - Prevents the same tab from being assigned to both Deck A and Deck B simultaneously.
 - Multi-Tab list marks Deck-owned tabs and disables redundant session capture.
 - DSP coefficients, Spatial/HRTF processing and SonoBus Remote Mobile algorithms are unchanged.
+
+3.2.9 startup fix:
+- Restored createNoiseNode(), createSafetyMeterNode(), and createSparkMonitorNode() used by offscreen startup.
+- Optional noise worklet remains fail-open to unity bypass if unavailable.
+- Prevents GitHub/Chrome startup failure: createNoiseNode is not defined.

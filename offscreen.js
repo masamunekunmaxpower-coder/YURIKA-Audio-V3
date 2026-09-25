@@ -70,6 +70,42 @@ function smooth(param, value, now, seconds = 0.05) {
   param.linearRampToValueAtTime(value, now + seconds);
 }
 
+async function createNoiseNode(ctx) {
+  try {
+    await ctx.audioWorklet.addModule(chrome.runtime.getURL("noise-worklet.js"));
+    return { node: new AudioWorkletNode(ctx, "yurika-noise-suppressor"), available: true };
+  } catch {
+    return { node: ctx.createGain(), available: false };
+  }
+}
+
+async function createSafetyMeterNode(ctx) {
+  try {
+    await ctx.audioWorklet.addModule(chrome.runtime.getURL("safety-meter-worklet.js"));
+    const node = new AudioWorkletNode(ctx, "yurika-safety-meter");
+    node.port.onmessage = (event) => {
+      const data = event?.data;
+      if (!data || data.type !== "stats") return;
+      handleSafetyStats(data);
+    };
+    return { node, available: true };
+  } catch {
+    return { node: ctx.createGain(), available: false };
+  }
+}
+
+async function createSparkMonitorNode(ctx) {
+  try {
+    await ctx.audioWorklet.addModule(chrome.runtime.getURL("spark-monitor-worklet.js"));
+    const node = new AudioWorkletNode(ctx, "yurika-spark-monitor", { numberOfInputs:1, numberOfOutputs:1, outputChannelCount:[1] });
+    node.port.onmessage = (event) => handleSparkReport(event?.data);
+    return { node, available: true };
+  } catch {
+    return { node: ctx.createGain(), available: false };
+  }
+}
+
+
 
 function emitSpatialEvent(type, detail = {}) {
   const safeType = String(type || "spatial:event");

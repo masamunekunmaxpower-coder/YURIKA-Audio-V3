@@ -1,10 +1,10 @@
 ﻿{
-    "version":  "3.2.7",
-    "evaluator":  "YURIKA_AUDIO_TEST_SWAPPER_V2_SPATIAL_AMP",
-    "managedFileCount":  51,
+    "version":  "3.2.9",
+    "evaluator":  "YURIKA_AUDIO_TEST_SWAPPER_V2_1_SPATIAL_AMP_STARTUP_GUARD",
+    "managedFileCount":  60,
     "schema":  1,
-    "sourceZip":  "YURIKA_Audio_GIRO_MONATIUM_3.2.7_CHROME_EXTENSION_INTERNAL_CLASS_A_AMP.zip",
-    "name":  "YURIKA Audio - GIRO MONATIUM 3.2.7",
-    "appliedAt":  "2026-09-25T16:24:34.6122928+09:00",
-    "sha256":  "5741b3ecf0b7fc3c174699fbffb5c2299e8c56a63d11d6525daf2664d5b31d45"
+    "sourceZip":  "YURIKA_Audio_GIRO_MONATIUM_3.2.9_CHROME_EXTENSION_CPP_WASM_SDK_STARTUP_FIX.zip",
+    "name":  "YURIKA Audio - GIRO MONATIUM 3.2.9",
+    "appliedAt":  "2026-09-25T16:42:31.0542094+09:00",
+    "sha256":  "d8089295932645007ef2f4e1cb79de434b48d846ee5072ae80486533bb75e1ba"
 }
