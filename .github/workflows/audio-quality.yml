@@ -46,6 +46,7 @@ jobs:
           node tests/virtual_amp_contract_test.js
           node tests/spatial_cue_preservation_test.js
           node tests/adaptive_safety_stability_test.js
+          python tests/integrity_numeric_stability_test.py
 
       - name: Legacy compatibility advisory
         continue-on-error: true

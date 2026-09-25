@@ -54,6 +54,18 @@ if offscreen_path.exists():
         if calls and not defined:
             fail(f'offscreen startup helper called but not defined: {helper}')
 
+
+# Integrity numeric-stability contract. Transparent mode must be a true unity path;
+# explicit DC blocking uses stable first-order IIR rather than an ultra-low Biquad.
+modular_path=ROOT/'modular-core.js'
+audio_modules_path=ROOT/'audio-modules.js'
+if modular_path.exists() and audio_modules_path.exists():
+    modular=modular_path.read_text(encoding='utf-8-sig',errors='replace')
+    am=audio_modules_path.read_text(encoding='utf-8-sig',errors='replace')
+    ok(bool(re.search(r'transparent:\s*\{\s*dcBlockHz:0(?:\.0)?',modular)), 'Integrity transparent must use dcBlockHz:0')
+    ok('createIIRFilter' in am and 'stable-first-order-iir' in am, 'Integrity stable first-order IIR implementation missing')
+    ok('filter(ctx,"highpass",5,0,0.55)' not in am, 'legacy ultra-low Integrity Biquad still present')
+
 meta=ROOT/'.yurika-test-candidate.json'
 if meta.exists():
     try: notes.append(json.loads(meta.read_text(encoding='utf-8-sig')))

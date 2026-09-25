@@ -47,12 +47,30 @@
     const lp=15000-(p.diffusion*3500); smooth(stage.lp.frequency,Math.min(lp,ctx.sampleRate*0.44),now,0.22);
   }
 
+  // Integrity DC blocking must remain numerically stable at 96 kHz. A second-order
+  // Biquad at only 3.5-5 Hz has coefficients extremely close to cancellation and
+  // can accumulate float32 residual in browser DSP implementations. Use normalized
+  // first-order IIR blockers instead, and make transparent mode a true unity path.
+  function createDcBlockIir(ctx,cutoffHz) {
+    const fc=Math.max(0.1,Number(cutoffHz)||0.1), r=Math.exp((-2*Math.PI*fc)/ctx.sampleRate), k=(1+r)*0.5;
+    return ctx.createIIRFilter([k,-k],[1,-r]);
+  }
   function createIntegrityStage(ctx,input) {
-    const bypass=ctx.createGain(), processed=ctx.createGain(), dc=filter(ctx,"highpass",5,0,0.55), sum=ctx.createGain(); bypass.gain.value=1; processed.gain.value=0; input.connect(bypass); bypass.connect(sum); input.connect(dc); dc.connect(processed); processed.connect(sum); return {output:sum,stage:{bypass,processed,dc,sum}};
+    const bypass=ctx.createGain(), processed=ctx.createGain(), dc35=createDcBlockIir(ctx,3.5), dc5=createDcBlockIir(ctx,5.0), dc35Gain=ctx.createGain(), dc5Gain=ctx.createGain(), sum=ctx.createGain();
+    bypass.gain.value=1; processed.gain.value=1; dc35Gain.gain.value=0; dc5Gain.gain.value=0;
+    input.connect(bypass); bypass.connect(sum);
+    input.connect(dc35); dc35.connect(dc35Gain); dc35Gain.connect(processed);
+    input.connect(dc5); dc5.connect(dc5Gain); dc5Gain.connect(processed); processed.connect(sum);
+    return {output:sum,stage:{bypass,processed,dc:dc35,dc35,dc5,dc35Gain,dc5Gain,sum,_implementation:"stable-first-order-iir"}};
   }
   function applyIntegrityStage(stage,settings,ctx) {
     if(!stage)return; const mode=settings.integrityEnabled?settings.integrityMode:"off",p=M.integrityProfile(mode,settings.integrityStrength),now=ctx.currentTime;
-    smooth(stage.bypass.gain,p.enabled?0:1,now,p.smoothingSeconds); smooth(stage.processed.gain,p.enabled?1:0,now,p.smoothingSeconds); if(p.dcBlockHz>0)smooth(stage.dc.frequency,p.dcBlockHz,now,p.smoothingSeconds); stage._profile=p;
+    const use35=p.enabled && p.dcBlockHz>0 && p.dcBlockHz<4.25, use5=p.enabled && p.dcBlockHz>=4.25;
+    // off/transparent are bit-clean unity paths; explicit stability modes select a DC blocker.
+    smooth(stage.bypass.gain,(use35||use5)?0:1,now,p.smoothingSeconds);
+    smooth(stage.dc35Gain.gain,use35?1:0,now,p.smoothingSeconds);
+    smooth(stage.dc5Gain.gain,use5?1:0,now,p.smoothingSeconds);
+    stage._profile={...p,implementation:"stable-first-order-iir",effectiveDcBlockHz:use35?3.5:(use5?5:0)};
   }
 
   function createCartridgeBranch(ctx,input) {

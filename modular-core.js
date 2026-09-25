@@ -60,7 +60,7 @@
     const t = clamp(finite(strength),0,100)/100;
     const base = {
       off: { dcBlockHz:0, smoothing:0.04, watchdog:false, softGuard:false },
-      transparent: { dcBlockHz:3.5, smoothing:0.06, watchdog:true, softGuard:false },
+      transparent: { dcBlockHz:0, smoothing:0.06, watchdog:true, softGuard:false },
       "network-stable": { dcBlockHz:3.5, smoothing:0.08, watchdog:true, softGuard:false },
       "ground-reference": { dcBlockHz:5.0, smoothing:0.10, watchdog:true, softGuard:true },
       stabilizer: { dcBlockHz:5.0, smoothing:0.14, watchdog:true, softGuard:true }

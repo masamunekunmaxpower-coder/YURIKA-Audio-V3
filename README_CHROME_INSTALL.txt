@@ -1,4 +1,11 @@
-YURIKA Audio GIRO MONATIUM 3.3.1
+YURIKA Audio GIRO MONATIUM 3.3.2
+
+3.3.2 Integrity Numeric Stability
+- Default Integrity transparent mode is now a true unity path with no hidden 3.5 Hz Biquad.
+- Explicit Integrity stability modes use normalized first-order IIR DC blockers instead of ultra-low-frequency second-order Biquads.
+- This targets the measured 96 kHz post-Integrity THD+N collapse without changing Self-DAP, HRTF, Spatial or Virtual Amp coefficients.
+- No added algorithmic delay.
+
 
 3.3.1 C++ / WebAssembly DSP SDK
 - Chrome cannot execute .cpp source directly. YURIKA compiles C++ to local WebAssembly before extension load/reload.

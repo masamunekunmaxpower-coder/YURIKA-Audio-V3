@@ -63,7 +63,7 @@ def main():
             if len(items)>1:
                 jumps=[]
                 for (a,ma),(b,mb) in zip(items,items[1:]): jumps.append((mb['thdn_db']-ma['thdn_db'],a,b))
-                worst=min(jumps,key=lambda x:x[0])
+                worst=max(jumps,key=lambda x:x[0])
                 lines += ['', f"- Largest THD+N degradation between adjacent taps: **{worst[1]} → {worst[2]} = {worst[0]:+.2f} dB**"]
             lines += ['', '### Normal control timeline', '', '```json', json.dumps(normal['timeline'],ensure_ascii=False,indent=2), '```','']
         iso=next((x for x in report[kind] if x['variant']=='all-controls-off'),None)

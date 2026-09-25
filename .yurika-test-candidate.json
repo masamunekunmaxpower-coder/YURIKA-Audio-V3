@@ -1,10 +1,10 @@
 ﻿{
-    "version":  "3.3.1",
-    "evaluator":  "YURIKA_AUDIO_QUALITY_V2_4_ADAPTIVE_STABILITY_DEEP_TAPS",
-    "managedFileCount":  61,
+    "version":  "3.3.2",
+    "evaluator":  "YURIKA_AUDIO_QUALITY_V2_5_INTEGRITY_STABILITY",
+    "managedFileCount":  62,
     "schema":  1,
-    "sourceZip":  "YURIKA_Audio_GIRO_MONATIUM_3.3.1_CHROME_EXTENSION.zip",
-    "name":  "YURIKA Audio - GIRO MONATIUM 3.3.1",
-    "appliedAt":  "2026-09-25T19:20:39.9191424+09:00",
-    "sha256":  "da39ac0fcc9afcd51b889948a3ff4f0989e50a2d770f962ec20aab85d4faec52"
+    "sourceZip":  "YURIKA_Audio_GIRO_MONATIUM_3.3.2_CHROME_EXTENSION.zip",
+    "name":  "YURIKA Audio - GIRO MONATIUM 3.3.2",
+    "appliedAt":  "2026-09-25T20:07:05.7919120+09:00",
+    "sha256":  "036e25d54512a2d52851e2d814f719af019be6391515d5271b9cd403138e7015"
 }
