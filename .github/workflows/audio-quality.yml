@@ -45,6 +45,7 @@ jobs:
           node tests/remote_mobile_contract_test.js
           node tests/virtual_amp_contract_test.js
           node tests/spatial_cue_preservation_test.js
+          node tests/adaptive_safety_stability_test.js
 
       - name: Legacy compatibility advisory
         continue-on-error: true

@@ -34,6 +34,7 @@ function freshState(previousSettings = DEFAULTS, previousRevision = 0) {
     contextLatencyPolicy:"uninitialized",
     videoTelemetry:{}, avSyncEstimatedAudioLatencyMs:null, avSyncBaseLatencyMs:null, avSyncAppliedDelayMs:0,
     safetyMonitorTimer: null, safetyStats: null, safetyLastStatsAtMs: 0, adaptiveTrimDb: 0,
+    adaptiveTrimQuietStreak: 0, adaptiveTrimHoldReason: "unity", adaptiveTrimLastPressureAtMs: 0, adaptiveTrimReleaseCount: 0,
     limiterPressureStreak: 0, limiterRelaxStreak: 0, safetyFaultLatched: false, safetyFaults: 0,
     autoLevelTimer: null, autoLevelDb: 0, sparkMakeupDb: 0, effectiveLevelDb: 0, effectiveLevelWrites: 0, autoLevelMeasuredDbfs: null, autoLevelRmsEma: null, autoLevelBuffer: null,
     djAutoMixTimer: null, djAutoMixActive: false, djAutoMixPosition: null, djAutoMixStartedAt: 0, djAutoMixDurationMs: 0, djAutoMixDirection: null,
@@ -801,32 +802,51 @@ function safetyMonitorTick() {
   const enabled = state.settings.adaptiveSafetyEnabled !== false;
   const limiterReduction = Number(nodes.limiter?.reduction);
   const peak = Number(state.safetyStats?.peak || 0);
+  const rmsDbfs = linearToDb(state.safetyStats?.rms || 0);
   const pressure = (Number.isFinite(limiterReduction) && limiterReduction < -1.5) || peak > 0.985;
   const relaxed = (!Number.isFinite(limiterReduction) || limiterReduction > -0.35) && peak < 0.90;
+  // v3.3.1: safety attenuation still attacks quickly, but it no longer releases while
+  // program audio is active. The old 0.10 dB / 0.8 s release ramp could land inside
+  // steady-state measurements (and audible sustained tones) and appear as THD+N.
+  const quietForRelease = peak < 0.08 || rmsDbfs < -42;
 
   if (!enabled) {
-    state.limiterPressureStreak = 0; state.limiterRelaxStreak = 0;
+    state.limiterPressureStreak = 0; state.limiterRelaxStreak = 0; state.adaptiveTrimQuietStreak = 0;
+    state.adaptiveTrimHoldReason = "disabled";
     if (state.adaptiveTrimDb !== 0) { state.adaptiveTrimDb = 0; smooth(nodes.adaptiveTrim.gain, 1, ctx.currentTime, 0.5); }
     return;
   }
 
   if (pressure) {
-    state.limiterPressureStreak++; state.limiterRelaxStreak = 0;
+    state.limiterPressureStreak++; state.limiterRelaxStreak = 0; state.adaptiveTrimQuietStreak = 0;
+    state.adaptiveTrimHoldReason = "pressure"; state.adaptiveTrimLastPressureAtMs = nowMs;
     if (state.limiterPressureStreak >= 3) {
       const next = Math.max(-3, state.adaptiveTrimDb - 0.25);
       if (next !== state.adaptiveTrimDb) { state.adaptiveTrimDb = next; smooth(nodes.adaptiveTrim.gain, dbToGain(next), ctx.currentTime, 0.08); }
       state.limiterPressureStreak = 0;
     }
   } else if (relaxed) {
-    state.limiterRelaxStreak++; state.limiterPressureStreak = Math.max(0, state.limiterPressureStreak - 1);
-    if (state.limiterRelaxStreak >= 12 && state.adaptiveTrimDb < 0) {
-      const next = Math.min(0, state.adaptiveTrimDb + 0.10);
-      state.adaptiveTrimDb = next; smooth(nodes.adaptiveTrim.gain, dbToGain(next), ctx.currentTime, 0.8);
-      state.limiterRelaxStreak = 0;
+    state.limiterPressureStreak = Math.max(0, state.limiterPressureStreak - 1);
+    if (state.adaptiveTrimDb < 0) {
+      if (quietForRelease) {
+        state.adaptiveTrimQuietStreak++; state.limiterRelaxStreak++; state.adaptiveTrimHoldReason = "quiet-release-pending";
+        if (state.adaptiveTrimQuietStreak >= 8) {
+          const next = Math.min(0, state.adaptiveTrimDb + 0.10);
+          state.adaptiveTrimDb = next; smooth(nodes.adaptiveTrim.gain, dbToGain(next), ctx.currentTime, 0.45);
+          state.adaptiveTrimQuietStreak = 0; state.limiterRelaxStreak = 0; state.adaptiveTrimReleaseCount++;
+          state.adaptiveTrimHoldReason = next < 0 ? "quiet-release-step" : "unity";
+        }
+      } else {
+        state.adaptiveTrimQuietStreak = 0; state.limiterRelaxStreak = 0;
+        state.adaptiveTrimHoldReason = "active-program-hold";
+      }
+    } else {
+      state.adaptiveTrimQuietStreak = 0; state.limiterRelaxStreak = 0; state.adaptiveTrimHoldReason = "unity";
     }
   } else {
     state.limiterPressureStreak = Math.max(0, state.limiterPressureStreak - 1);
-    state.limiterRelaxStreak = 0;
+    state.limiterRelaxStreak = 0; state.adaptiveTrimQuietStreak = 0;
+    state.adaptiveTrimHoldReason = state.adaptiveTrimDb < 0 ? "guard-band-hold" : "unity";
   }
 }
 
@@ -1824,6 +1844,10 @@ function status() {
     safetyFaultLatched: state.safetyFaultLatched,
     adaptiveSafetyEnabled: state.settings.adaptiveSafetyEnabled !== false,
     adaptiveTrimDb: Number(state.adaptiveTrimDb.toFixed(2)),
+    adaptiveTrimHoldReason: state.adaptiveTrimHoldReason,
+    adaptiveTrimQuietStreak: state.adaptiveTrimQuietStreak,
+    adaptiveTrimLastPressureAtMs: state.adaptiveTrimLastPressureAtMs,
+    adaptiveTrimReleaseCount: state.adaptiveTrimReleaseCount,
     stereoCorrelation: state.stereoCorrelationEma === null ? null : Number(state.stereoCorrelationEma.toFixed(6)),
     stereoClass: classifyStereo({ inputChannels:state.inputChannels, correlation:state.stereoCorrelationEma, balanceDb:state.safetyStats?.balanceDb, rmsDbfs:linearToDb(state.safetyStats?.rms), monoLikeStreak:state.monoLikeStreak }),
     runtimeRecoveries: state.runtimeRecoveries,

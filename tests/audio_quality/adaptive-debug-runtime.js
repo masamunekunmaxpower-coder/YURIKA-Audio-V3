@@ -8,10 +8,12 @@ function controlDebugSettings(kind, variant="normal") {
   if (variant === "adaptive-safety-off") patch.adaptiveSafetyEnabled=false;
   if (variant === "seam-valley-off") { patch.seamNaturalizerEnabled=false; patch.transientValleyEnabled=false; }
   if (variant === "orbit-off") patch.orbitKeeperEnabled=false;
+  if (variant === "impact-off") patch.impactEnabled=false;
+  if (variant === "integrity-off") patch.integrityEnabled=false;
   if (variant === "virtual-amp-off") patch.virtualAmpEnabled=false;
   if (variant === "all-controls-off") {
     patch.adaptiveSafetyEnabled=false; patch.seamNaturalizerEnabled=false; patch.transientValleyEnabled=false;
-    patch.orbitKeeperEnabled=false;
+    patch.orbitKeeperEnabled=false; patch.impactEnabled=false; patch.virtualAmpEnabled=false;
     if (kind === "selfdap") patch.selfDapRestoration="off";
   }
   return C.sanitizeSettings({...s,...patch});
@@ -23,6 +25,10 @@ function debugStateSnapshot() {
     wallMs:Date.now(),
     contextTime:Number(globalThis.__YURIKA_TEST_API__.getState()?.context?.currentTime || 0),
     adaptiveTrimDb:st.adaptiveTrimDb,
+    adaptiveTrimHoldReason:st.adaptiveTrimHoldReason,
+    adaptiveTrimQuietStreak:st.adaptiveTrimQuietStreak,
+    adaptiveTrimReleaseCount:st.adaptiveTrimReleaseCount,
+    adaptiveTrimLastPressureAtMs:st.adaptiveTrimLastPressureAtMs,
     limiterReductionDb:st.limiterReductionDb,
     safetyPeak:st.safetyPeak,
     seamConfidence:st.seamConfidence,
@@ -51,6 +57,19 @@ async function captureDebugCase(kind, variant, inputUrl, fullTaps=false, tabId=2
       if (fullTaps) {
         nodes.preSelfDap=n.voiceMaterial?.sum;
         nodes.postSelfDap=n.selfDap?.outputSum;
+        nodes.postWidth=n.widthMatrix?.merger || n.selfDap?.outputSum;
+        nodes.postPerspective=n.perspective?.sum;
+        nodes.postDacMatrix=n.dacMatrix?.out;
+        nodes.postDapCrossfeed=n.dapCrossfeed?.merger || n.dapSum;
+        nodes.postRoom=n.room?.out;
+        nodes.postIntegrity=n.integrity?.sum;
+        nodes.postHrtf=n.hrtf?.air || n.hrtf?.bypass;
+        nodes.postHeadphone=(n.headphoneCorrection?.calibrationFilters && n.headphoneCorrection.calibrationFilters.length) ? n.headphoneCorrection.calibrationFilters[n.headphoneCorrection.calibrationFilters.length-1] : n.headphoneCorrection?.calPre;
+        nodes.postCompressor=n.compressorSum;
+        nodes.postOutput=n.output;
+        nodes.postValley=n.transientValley;
+        nodes.postSpatial=n.spatial3d?.output || n.transientValley;
+        nodes.postAutoLevel=n.autoLevel;
         nodes.postAdaptive=n.adaptiveTrim;
       }
       nodes.final=n.avSync?.sum;
@@ -76,6 +95,6 @@ async function captureDebugCase(kind, variant, inputUrl, fullTaps=false, tabId=2
 
 globalThis.captureAdaptiveDebugCase=captureDebugCase;
 globalThis.getAdaptiveDebugVariants=()=>({
-  selfdap:["normal","restoration-off","adaptive-safety-off","seam-valley-off","orbit-off","all-controls-off"],
-  sonobus:["normal","adaptive-safety-off","seam-valley-off","orbit-off","virtual-amp-off","all-controls-off"]
+  selfdap:["normal","restoration-off","adaptive-safety-off","seam-valley-off","orbit-off","impact-off","integrity-off","virtual-amp-off","all-controls-off"],
+  sonobus:["normal","adaptive-safety-off","seam-valley-off","orbit-off","impact-off","integrity-off","virtual-amp-off","all-controls-off"]
 });

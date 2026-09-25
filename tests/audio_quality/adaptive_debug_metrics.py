@@ -23,21 +23,23 @@ def analyze_wav(path):
         if h*1000>=sr*.45: break
         a=tone_amp(mono,sr,h*1000);p+=a*a
     thd=db20(math.sqrt(p)/fund)
-    # Near-carrier energy is a direct proxy for slow gain modulation sidebands.
-    f,P=signal.periodogram(mono,fs=sr,window='hann',nfft=max(131072,2**int(np.ceil(np.log2(len(mono))))),scaling='spectrum')
-    band=(f>=970)&(f<=1030)&((f<998.5)|(f>1001.5)); side=math.sqrt(max(float(np.sum(P[band])),1e-30)); mod=db20(side/fund)
+    # Measure sidebands after subtracting the best-fit 1 kHz carrier.
+    # The previous raw-periodogram method mostly measured the Hann main-lobe itself.
+    f,P=signal.periodogram(res,fs=sr,window='hann',nfft=max(131072,2**int(np.ceil(np.log2(len(res))))),scaling='spectrum')
+    band=(f>=970)&(f<=1030); side=math.sqrt(max(float(np.sum(P[band])),1e-30)); mod=db20(side/fund)
     return {'sample_rate':sr,'thdn_db':round(thdn,3),'thd_db':round(thd,3),'near_carrier_modulation_db':round(mod,3),'rms_dbfs':round(db20(rms(mono)),3)}
 def timeline_summary(items):
     if not items:return {}
     def vals(k): return [float(x[k]) for x in items if x.get(k) is not None and isinstance(x.get(k),(int,float))]
     out={}
-    for k in ['adaptiveTrimDb','limiterReductionDb','safetyPeak','seamConfidence','transientValleyDepthDb','orbitLevel','orbitActions','selfDapRestorationScore']:
+    for k in ['adaptiveTrimDb','adaptiveTrimQuietStreak','adaptiveTrimReleaseCount','limiterReductionDb','safetyPeak','seamConfidence','transientValleyDepthDb','orbitLevel','orbitActions','selfDapRestorationScore']:
         v=vals(k)
         if v: out[k]={'min':round(min(v),4),'max':round(max(v),4),'span':round(max(v)-min(v),4)}
     out['transientValleyTriggersMax']=max([int(x.get('transientValleyTriggers') or 0) for x in items],default=0)
     out['seamEventsMax']=max([int(x.get('seamEvents') or 0) for x in items],default=0)
     out['restorationActiveSeen']=any(bool(x.get('selfDapRestorationActive')) for x in items)
     out['restorationReasons']=sorted({str(x.get('selfDapRestorationReason')) for x in items if x.get('selfDapRestorationReason')})
+    out['adaptiveTrimHoldReasons']=sorted({str(x.get('adaptiveTrimHoldReason')) for x in items if x.get('adaptiveTrimHoldReason')})
     return out
 
 def case(kind,variant):
@@ -45,7 +47,7 @@ def case(kind,variant):
     for tap in meta['tapNames']: metrics[tap]=analyze_wav(f'{prefix}.{tap}.wav')
     return {'variant':variant,'metrics':metrics,'timeline':timeline_summary(meta.get('timeline',[]))}
 def main():
-    variants={'selfdap':['normal','restoration-off','adaptive-safety-off','seam-valley-off','orbit-off','all-controls-off'],'sonobus':['normal','adaptive-safety-off','seam-valley-off','orbit-off','virtual-amp-off','all-controls-off']}
+    variants={'selfdap':['normal','restoration-off','adaptive-safety-off','seam-valley-off','orbit-off','impact-off','integrity-off','virtual-amp-off','all-controls-off'],'sonobus':['normal','adaptive-safety-off','seam-valley-off','orbit-off','impact-off','integrity-off','virtual-amp-off','all-controls-off']}
     report={k:[case(k,v) for v in vs] for k,vs in variants.items()}
     lines=['# YURIKA Adaptive-Control Debug Report','', '> THD+N includes non-harmonic/time-varying residual. THD is harmonic-only; near-carrier modulation estimates slow gain-control sidebands around 1 kHz.','']
     for kind,title in [('selfdap','Self-DAP'),('sonobus','SonoBus Mobile')]:
@@ -56,7 +58,13 @@ def main():
         normal=report[kind][0]
         if len(normal['metrics'])>1:
             lines += ['### Normal stage taps','', '| Tap | THD+N dB | THD dB | Modulation dB |','|---|---:|---:|---:|']
-            for tap,m in normal['metrics'].items(): lines.append(f"| {tap} | {m['thdn_db']:.2f} | {m['thd_db']:.2f} | {m['near_carrier_modulation_db']:.2f} |")
+            items=list(normal['metrics'].items())
+            for tap,m in items: lines.append(f"| {tap} | {m['thdn_db']:.2f} | {m['thd_db']:.2f} | {m['near_carrier_modulation_db']:.2f} |")
+            if len(items)>1:
+                jumps=[]
+                for (a,ma),(b,mb) in zip(items,items[1:]): jumps.append((mb['thdn_db']-ma['thdn_db'],a,b))
+                worst=min(jumps,key=lambda x:x[0])
+                lines += ['', f"- Largest THD+N degradation between adjacent taps: **{worst[1]} → {worst[2]} = {worst[0]:+.2f} dB**"]
             lines += ['', '### Normal control timeline', '', '```json', json.dumps(normal['timeline'],ensure_ascii=False,indent=2), '```','']
         iso=next((x for x in report[kind] if x['variant']=='all-controls-off'),None)
         if iso and len(iso['metrics'])>1:
