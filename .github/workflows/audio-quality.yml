@@ -12,10 +12,10 @@ concurrency:
 jobs:
   quality:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Candidate metadata
         shell: bash
@@ -27,11 +27,11 @@ jobs:
             echo '```' >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: "22"
 
@@ -43,6 +43,7 @@ jobs:
         run: |
           python tests/candidate_static_test.py
           node tests/remote_mobile_contract_test.js
+          node tests/virtual_amp_contract_test.js
 
       - name: Legacy compatibility advisory
         continue-on-error: true
@@ -64,6 +65,12 @@ jobs:
       - name: Analyzer identity self-test
         run: python tests/audio_quality/analyzer_selftest.py
 
+      - name: Generate specialized spatial / amp stimuli
+        run: python tests/audio_quality/generate_specialized_stimuli.py
+
+      - name: Specialized analyzer self-test
+        run: python tests/audio_quality/specialized_analyzer_selftest.py
+
       - name: Install Playwright Chromium
         run: |
           npm install --no-save playwright
@@ -75,12 +82,28 @@ jobs:
       - name: Analyze audio quality
         run: python tests/audio_quality/metrics.py
 
+      - name: Render 3D localization and Virtual Amp benches
+        run: node tests/audio_quality/run_specialized_playwright.mjs
+
+      - name: Analyze 3D localization and Virtual Amp benches
+        run: python tests/audio_quality/specialized_metrics.py
+
       - name: Job summary
         if: always()
         shell: bash
         run: |
           if [ -f tests/audio_quality/results/report.md ]; then
             cat tests/audio_quality/results/report.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -f tests/audio_quality/results/specialized-report.md ]; then
+            echo >> "$GITHUB_STEP_SUMMARY"
+            cat tests/audio_quality/results/specialized-report.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -f tests/audio_quality/results/specialized-render-failure.json ]; then
+            echo '### Specialized render failure diagnostic' >> "$GITHUB_STEP_SUMMARY"
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            cat tests/audio_quality/results/specialized-render-failure.json >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
           fi
           if [ -f tests/audio_quality/results/render-failure.json ]; then
             echo '### Render failure diagnostic' >> "$GITHUB_STEP_SUMMARY"
@@ -91,7 +114,7 @@ jobs:
 
       - name: Upload audio quality artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: yurika-audio-quality
           path: tests/audio_quality/results/

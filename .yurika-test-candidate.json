@@ -1,10 +1,10 @@
 ﻿{
-    "version":  "3.2.1",
-    "evaluator":  "YURIKA_AUDIO_TEST_SWAPPER_V1_1",
+    "version":  "3.2.7",
+    "evaluator":  "YURIKA_AUDIO_TEST_SWAPPER_V2_SPATIAL_AMP",
     "managedFileCount":  51,
     "schema":  1,
-    "sourceZip":  "YURIKA_Audio_GIRO_MONATIUM_3.2.1_SONOBUS_REMOTE_MOBILE.zip",
-    "name":  "YURIKA Audio - GIRO MONATIUM 3.2.1",
-    "appliedAt":  "2026-09-25T12:55:43.7430317+09:00",
-    "sha256":  "cdedc63291ad99b581c2d7cc547b7b2eb2e17155633b55de7b0525edf9743a4f"
+    "sourceZip":  "YURIKA_Audio_GIRO_MONATIUM_3.2.7_CHROME_EXTENSION_INTERNAL_CLASS_A_AMP.zip",
+    "name":  "YURIKA Audio - GIRO MONATIUM 3.2.7",
+    "appliedAt":  "2026-09-25T16:24:34.6122928+09:00",
+    "sha256":  "5741b3ecf0b7fc3c174699fbffb5c2299e8c56a63d11d6525daf2664d5b31d45"
 }

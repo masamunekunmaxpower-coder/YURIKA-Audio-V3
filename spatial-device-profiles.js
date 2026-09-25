@@ -100,6 +100,8 @@
 
   const LABEL_RULES = freeze([
     freeze({ re:/\bsonobus\b/i, profileId:"sonobus-mobile-binaural", confidence:0.86 }),
+    freeze({ re:/\bath[-\s]?ws\s*330bt\b|audio[- ]?technica.*\bath[-\s]?ws\s*330bt\b/i, profileId:"generic-headphone", confidence:0.99 }),
+    freeze({ re:/\baudio[- ]?technica\b.*\bath[-\s]?[a-z0-9]+|\bath[-\s]?[a-z0-9]+\b/i, profileId:"generic-headphone", confidence:0.90 }),
     freeze({ re:/\bhd\s*-?600\b|sennheiser.*600/i, profileId:"sennheiser-hd600", confidence:0.98 }),
     freeze({ re:/wh\s*-?1000xm5|sony.*xm5/i, profileId:"sony-wh1000xm5", confidence:0.98 }),
     freeze({ re:/airpods|air pods/i, profileId:"airpods-family", confidence:0.94 }),
@@ -140,7 +142,7 @@
     return { profileId:null, confidence:0.15, reason:"label-unmatched" };
   }
 
-  function resolve({ requestedProfile="auto", outputTarget="local", label="", legacyDeviceProfile="stereo" } = {}) {
+  function resolve({ requestedProfile="auto", outputTarget="local", label="", legacyDeviceProfile="stereo", headphoneIntent=false } = {}) {
     if (outputTarget === "sonobus-mobile-headphones") {
       return { profile:PROFILES["sonobus-mobile-binaural"], profileId:"sonobus-mobile-binaural", confidence:1, reason:"remote-target" };
     }
@@ -151,6 +153,18 @@
       return { profile:PROFILES[requestedProfile], profileId:requestedProfile, confidence:1, reason:"manual" };
     }
     const matched = matchLabel(label);
+    // Explicit local listening intent outranks an unavailable or stale OS label.
+    // This is especially important for Bluetooth headphones whose default output label
+    // may be hidden until speaker-selection permission is granted.
+    if (Boolean(headphoneIntent) || String(legacyDeviceProfile||"") === "headphone") {
+      const matchedHeadphone = matched.profileId && ["generic-headphone","generic-iem","generic-earbuds","sennheiser-hd600","sony-wh1000xm5","airpods-family"].includes(matched.profileId);
+      const profileId = matchedHeadphone ? matched.profileId : "generic-headphone";
+      return {
+        profile:PROFILES[profileId], profileId,
+        confidence:matchedHeadphone ? matched.confidence : 0.95,
+        reason:matchedHeadphone ? matched.reason : (matched.profileId ? "headphone-intent-overrides-non-headphone-label" : "headphone-intent")
+      };
+    }
     const profileId = matched.profileId || fallbackForLegacyDeviceProfile(legacyDeviceProfile);
     return {
       profile:PROFILES[profileId] || PROFILES[DEFAULT_PROFILE_ID],
@@ -161,7 +175,7 @@
   }
 
   globalThis.YurikaSpatialDeviceProfiles = freeze({
-    VERSION:"1.1.0",
+    VERSION:"1.2.0",
     DEFAULT_PROFILE_ID,
     PROFILES,
     get,

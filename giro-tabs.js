@@ -22,7 +22,8 @@
     <div class="giro-tabs" id="giroTabs" role="tablist" aria-label="オーディオ設定タブ"></div>
     <div class="giro-shell-body">
       <aside class="giro-scene" id="giroScene" aria-label="ジーロキャラクターエリア"></aside>
-    </div>`;
+    </div>
+    <div class="giro-action-toast" id="giroActionToast" role="status" aria-live="polite" data-state="idle">操作状態: 待機中</div>`;
 
   document.body.appendChild(shell);
   const top = shell.querySelector('.giro-shell-top');

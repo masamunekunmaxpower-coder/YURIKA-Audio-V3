@@ -42,7 +42,7 @@
         if(normalized.includes(a)){const conf=Math.min(.99,.86+.12*(a.length/Math.max(a.length,normalized.length)));if(conf>best.confidence)best={profileId:id,confidence:conf,label:String(label),reason:`contains:${alias}`};}
       }
     }
-    const headphoneLike=/headphone|headset|headphones|ヘッドホン|ヘッドセット|stereo|bluetooth|buds|airpods|wf-|wh-|hd\s?\d/i.test(normalized);
+    const headphoneLike=/headphone|headset|headphones|ヘッドホン|ヘッドセット|stereo|bluetooth|buds|airpods|wf-|wh-|hd\s?\d|audio[- ]?technica|\bath[- ]?[a-z0-9]+/i.test(normalized);
     return{...best,headphoneLike:Boolean(headphoneLike)};
   }
   globalThis.YurikaHeadphoneProfiles = Object.freeze({ PROFILES, getProfile, listProfiles, normalizeLabel, matchOutputLabel });

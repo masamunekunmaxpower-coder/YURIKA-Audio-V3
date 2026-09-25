@@ -144,3 +144,10 @@ button:disabled,select:disabled,input:disabled{opacity:.55!important;filter:satu
 #giroStage[data-diagnostic="1"] .giro-pose-layer.active,
 #giroStage[data-diagnostic="1"] .giro-rim-wrap,
 #giroStage[data-diagnostic="1"] .giro-music-note{animation:none!important;transition:none!important}
+
+/* 3.2.2: persistent action feedback. Kept outside tab panels so capture errors cannot disappear with tab navigation. */
+.giro-action-toast{position:absolute;right:38px;bottom:5px;z-index:12;max-width:390px;min-width:220px;padding:5px 10px;border:2px solid #776b61;border-radius:12px;background:#fff8df;color:#695e55;font-size:9px;font-weight:800;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;box-shadow:0 2px 0 #d6c7a7}
+.giro-action-toast[data-state="error"]{background:#ffe9e4;border-color:#9b665e;color:#7c4038}
+.giro-action-toast[data-state="ok"]{background:#e8f4e6;border-color:#6e8b69;color:#4d6948}
+.mix-action-status[data-state="error"]{background:#ffe9e4!important;border-color:#9b665e!important;color:#7c4038!important}
+.mix-action-status[data-state="ok"]{background:#e8f4e6!important;border-color:#6e8b69!important;color:#4d6948!important}

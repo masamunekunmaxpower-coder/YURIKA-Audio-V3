@@ -44,3 +44,10 @@ button:active { transform:translateY(1px); }
 .spatial-panel { border-top-color:#31536d; background:linear-gradient(180deg,rgba(27,63,88,.17),rgba(17,19,24,0)); padding:8px 6px 0; border-radius:8px; }
 .spatial-master { color:#ccecff !important; font-weight:700; letter-spacing:.04em; }
 #spatialOutputState { min-height:0; margin-top:8px; }
+
+.virtual-amp-panel { border-top-color:#6f5636; background:linear-gradient(180deg,rgba(105,74,35,.15),rgba(17,19,24,0)); padding:8px 6px 0; border-radius:8px; }
+.amp-spec-grid { display:grid; grid-template-columns:1fr auto; gap:4px 10px; padding:6px 8px; font-size:11px; color:#aeb7c6; }
+.amp-spec-grid strong { color:#dde5f3; font-weight:600; text-align:right; }
+#virtualAmpState[data-state="ok"] { border-color:#315d43; color:#bfe8cc; }
+#virtualAmpState[data-state="warn"] { border-color:#6c5933; color:#ead8a9; }
+#virtualAmpState[data-state="error"] { border-color:#74353a; color:#f0b7ba; }

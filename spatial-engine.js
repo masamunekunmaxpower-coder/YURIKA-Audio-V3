@@ -52,7 +52,8 @@
       requestedProfile:settings.spatialDeviceProfile,
       label:settings.spatialOutputLabel,
       legacyDeviceProfile:settings.deviceProfile,
-      outputTarget:settings.spatialOutputTarget
+      outputTarget:settings.spatialOutputTarget,
+      headphoneIntent:Boolean(settings.deviceProfile === "headphone" || settings.headphoneOutputDeviceId || settings.headphoneOutputLabel || settings.headphoneCorrectionEnabled)
     }) || { profile:{}, profileId:"generic-stereo-speaker", reason:"registry-unavailable", confidence:0 };
     const profile = r.profile || {};
     const mode = MODE_SHAPES[settings.spatialMode] || MODE_SHAPES.auto;
@@ -61,7 +62,7 @@
     const speakerLike = !headphoneLike;
     const baseStrength = clamp(profile.spatialStrength, 0, 0.8);
     const strength = clamp(baseStrength * mode.strength, 0, 0.80);
-    const hrtfAlreadyActive = Boolean(settings.hrtfEnabled) && settings.deviceProfile === "headphone";
+    const hrtfAlreadyActive = Boolean(settings.hrtfEnabled) && headphoneLike;
 
     const width = clamp(strength * mode.width * sc.width, 0, headphoneLike ? 0.72 : 0.62);
     const depth = clamp(strength * mode.depth * sc.depth, 0, 0.72);
@@ -228,7 +229,7 @@
   function apply(stage, settings={}, { resolved=null, scene={}, initial=false } = {}) {
     if (!stage?.ctx) return null;
     const ctx=stage.ctx, now=ctx.currentTime;
-    const r = resolved || Registry?.resolve?.({ requestedProfile:settings.spatialDeviceProfile, label:settings.spatialOutputLabel, legacyDeviceProfile:settings.deviceProfile });
+    const r = resolved || Registry?.resolve?.({ requestedProfile:settings.spatialDeviceProfile, outputTarget:settings.spatialOutputTarget, label:settings.spatialOutputLabel, legacyDeviceProfile:settings.deviceProfile, headphoneIntent:Boolean(settings.deviceProfile === "headphone" || settings.headphoneOutputDeviceId || settings.headphoneOutputLabel || settings.headphoneCorrectionEnabled) });
     const p = computeParameters(settings,{resolved:r,scene,sampleRate:ctx.sampleRate,inputChannels:stage.inputChannels});
     stage.resolved=r; stage.lastParams=p;
     const enabled=Boolean(settings.spatialEnabled);
@@ -276,6 +277,6 @@
   }
 
   globalThis.YurikaSpatialEngine = freeze({
-    VERSION:"1.1.0", MODE_SHAPES, computeParameters, createStage, apply, dispose
+    VERSION:"1.2.0", MODE_SHAPES, computeParameters, createStage, apply, dispose
   });
 })();

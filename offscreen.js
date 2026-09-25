@@ -18,6 +18,7 @@ const HeadphoneProfiles = globalThis.YurikaHeadphoneProfiles;
 const SpatialProfiles = globalThis.YurikaSpatialDeviceProfiles;
 const SpatialEngine = globalThis.YurikaSpatialEngine;
 const SpatialDiagnostics = globalThis.YurikaSpatialDiagnostics;
+const VirtualAmp = globalThis.YurikaVirtualAmp;
 
 let state = freshState();
 
@@ -30,6 +31,7 @@ function freshState(previousSettings = DEFAULTS, previousRevision = 0) {
     headphoneOutputSinkApplied:false, headphoneOutputSinkError:null, headphoneDetectedLabel:previousSettings.headphoneOutputLabel||"", headphoneCalibrationLastAppliedAtMs:0,
     spatialResolved:null, spatialParams:null, spatialFallbackStatus:"none", spatialLastAdaptiveApplyMs:0,
     spatialDeviceListener:null, spatialSinkListener:null, spatialSinkApplied:false, spatialSinkError:null, spatialRuntimeOutputLabel:previousSettings.spatialOutputLabel||"",
+    contextLatencyPolicy:"uninitialized",
     videoTelemetry:{}, avSyncEstimatedAudioLatencyMs:null, avSyncBaseLatencyMs:null, avSyncAppliedDelayMs:0,
     safetyMonitorTimer: null, safetyStats: null, safetyLastStatsAtMs: 0, adaptiveTrimDb: 0,
     limiterPressureStreak: 0, limiterRelaxStreak: 0, safetyFaultLatched: false, safetyFaults: 0,
@@ -96,7 +98,8 @@ function applySpatialLayer(initial = false, previous = {}) {
       requestedProfile:state.settings.spatialDeviceProfile,
       outputTarget:state.settings.spatialOutputTarget,
       label:state.settings.spatialOutputLabel || state.spatialRuntimeOutputLabel,
-      legacyDeviceProfile:state.settings.deviceProfile
+      legacyDeviceProfile:state.settings.deviceProfile,
+      headphoneIntent:Boolean(state.settings.deviceProfile === "headphone" || state.settings.headphoneOutputDeviceId || state.settings.headphoneOutputLabel || state.settings.headphoneCorrectionEnabled)
     });
     const remoteBinaural=state.settings.spatialOutputTarget==="sonobus-mobile-headphones" && state.settings.spatialEnabled;
     const spatialSettings=remoteBinaural ? {...state.settings,hrtfEnabled:true,hrtfProfile:state.settings.hrtfEnabled?state.settings.hrtfProfile:"front",deviceProfile:"headphone"} : state.settings;
@@ -120,6 +123,14 @@ async function applyOutputSink(next, previous = {}, force = false) {
   if (!ctx) return;
   const targetId=String(next.spatialOutputDeviceId || next.headphoneOutputDeviceId || "");
   const prevId=String(previous.spatialOutputDeviceId || previous.headphoneOutputDeviceId || "");
+  // Do not touch the sink when both sides already mean the browser default.
+  // setSinkId("") can emit an asynchronous sinkchange on some Chrome/OS combinations,
+  // which previously caused an unnecessary Spatial parameter re-ramp.
+  if (!targetId && !prevId) {
+    state.spatialSinkApplied=true; state.spatialSinkError=null;
+    state.headphoneOutputSinkApplied=true; state.headphoneOutputSinkError=null;
+    return;
+  }
   if (!force && targetId === prevId) return;
   if (typeof ctx.setSinkId !== "function") {
     state.spatialSinkApplied=false;
@@ -167,9 +178,11 @@ async function handleSpatialDeviceChange(reason = "devicechange") {
         const previous=state.settings;
         const patch={spatialOutputLabel:label};
         state.settings=sanitizeSettings({...state.settings,...patch});
-        applySpatialLayer(false,previous);
+        if (state.settings.spatialOutputTarget === "local") applySpatialLayer(false,previous);
         try { await chrome.runtime.sendMessage({target:"service-worker",type:"SPATIAL_RUNTIME_PATCH",patch}); } catch {}
-      } else if (state.settings.spatialDeviceProfile === "auto") {
+      } else if (state.settings.spatialDeviceProfile === "auto" && state.settings.spatialOutputTarget === "local") {
+        // Remote SonoBus profiles are fixed by outputTarget and do not depend on an OS label.
+        // Avoid re-ramping Spatial parameters on unrelated sink/device notifications.
         applySpatialLayer(false,state.settings);
       }
       emitSpatialEvent("spatial:device-change",{source:reason,label:label||"unavailable",profile:state.spatialResolved?.profileId||null});
@@ -274,6 +287,14 @@ function createVoiceMaterialStage(ctx, input) {
   return { output:sum, stage:{body,mud,presence,air,direct,delay,reflectionLp,reflectionGain,sum} };
 }
 
+
+function isLocalHeadphoneIntent(settings = {}) {
+  if (String(settings.spatialOutputTarget || "local").startsWith("sonobus-")) return false;
+  const spatialHeadphone=["generic-headphone","generic-iem","generic-earbuds","sennheiser-hd600","sony-wh1000xm5","airpods-family"].includes(String(settings.spatialDeviceProfile||""));
+  const label=String(settings.headphoneOutputLabel||settings.spatialOutputLabel||"");
+  const labelHeadphone=/headphone|headset|headphones|ヘッドホン|ヘッドセット|airpods|earbuds|iem|audio[- ]?technica|\bath[- _]?[a-z0-9]+|wh[- ]?1000|wf[- ]?/i.test(label);
+  return settings.deviceProfile === "headphone" || spatialHeadphone || labelHeadphone || Boolean(settings.headphoneOutputDeviceId);
+}
 function createHrtfStage(ctx, input, channels = 2) {
   if (channels < 2) { const bypass=ctx.createGain(); input.connect(bypass); return {output:bypass,stage:{bypass,mono:true}}; }
   const split=ctx.createChannelSplitter(2), merge=ctx.createChannelMerger(2);
@@ -303,15 +324,28 @@ function createHeadphoneCorrectionStage(ctx, input) {
 async function createContext(settings) {
   let ctx;
   const remoteTarget=String(settings.spatialOutputTarget||"local").startsWith("sonobus-");
+  const localHeadphone=isLocalHeadphoneIntent(settings);
+
   if(remoteTarget){
+    state.contextLatencyPolicy="interactive-remote-48k";
     try { ctx = new AudioContext({ latencyHint:"interactive", sampleRate:48000 }); }
     catch { try { ctx = new AudioContext({ latencyHint:"interactive" }); } catch {} }
   }
+  if(!ctx && localHeadphone && settings.hiResMode){
+    state.contextLatencyPolicy="interactive-headphone-hires";
+    try { ctx = new AudioContext({ latencyHint:"interactive", sampleRate:96000 }); }
+    catch { try { ctx = new AudioContext({ latencyHint:"interactive" }); } catch {} }
+  }
+  if(!ctx && localHeadphone){
+    state.contextLatencyPolicy="interactive-headphone";
+    try { ctx = new AudioContext({ latencyHint:"interactive" }); } catch {}
+  }
   if (!ctx && settings.hiResMode) {
+    state.contextLatencyPolicy="playback-hires";
     try { ctx = new AudioContext({ latencyHint: "playback", sampleRate: 96000 }); }
     catch { /* browser/device does not support requested sample rate */ }
   }
-  if(!ctx)ctx=new AudioContext({ latencyHint: "playback" });
+  if(!ctx){ state.contextLatencyPolicy="playback-default"; ctx=new AudioContext({ latencyHint: "playback" }); }
   state.headphoneOutputSinkApplied=false; state.headphoneOutputSinkError=null;
   const sink=String(settings.headphoneOutputDeviceId||"");
   if(sink && typeof ctx.setSinkId==="function"){
@@ -319,41 +353,6 @@ async function createContext(settings) {
     catch(e){state.headphoneOutputSinkError=e?.message||String(e);}
   }
   return ctx;
-}
-
-async function createNoiseNode(ctx) {
-  try {
-    await ctx.audioWorklet.addModule(chrome.runtime.getURL("noise-worklet.js"));
-    return { node: new AudioWorkletNode(ctx, "yurika-noise-suppressor"), available: true };
-  } catch {
-    return { node: ctx.createGain(), available: false };
-  }
-}
-
-async function createSafetyMeterNode(ctx) {
-  try {
-    await ctx.audioWorklet.addModule(chrome.runtime.getURL("safety-meter-worklet.js"));
-    const node = new AudioWorkletNode(ctx, "yurika-safety-meter");
-    node.port.onmessage = (event) => {
-      const data = event?.data;
-      if (!data || data.type !== "stats") return;
-      handleSafetyStats(data);
-    };
-    return { node, available: true };
-  } catch {
-    return { node: ctx.createGain(), available: false };
-  }
-}
-
-async function createSparkMonitorNode(ctx) {
-  try {
-    await ctx.audioWorklet.addModule(chrome.runtime.getURL("spark-monitor-worklet.js"));
-    const node = new AudioWorkletNode(ctx, "yurika-spark-monitor", { numberOfInputs:1, numberOfOutputs:1, outputChannelCount:[1] });
-    node.port.onmessage = (event) => handleSparkReport(event?.data);
-    return { node, available: true };
-  } catch {
-    return { node: ctx.createGain(), available: false };
-  }
 }
 
 function handleSparkReport(raw) {
@@ -518,7 +517,7 @@ function applyHrtfAndHeadphone(next, initial=false, previous=null){
   // short diagnostic median instead of mixing old and new spatial states.
   const prev=previous||state.settings;
   if(initial || next.hrtfEnabled!==prev.hrtfEnabled || next.hrtfProfile!==prev.hrtfProfile || Number(next.hrtfAmount)!==Number(prev.hrtfAmount) || next.deviceProfile!==prev.deviceProfile || next.spatialOutputTarget!==prev.spatialOutputTarget) state.hrtfCueHistory=[];
-  const localHeadphoneMode=next.deviceProfile==="headphone";
+  const localHeadphoneMode=isLocalHeadphoneIntent(next);
   const remoteBinaural=next.spatialEnabled && next.spatialOutputTarget==="sonobus-mobile-headphones";
   const hrtfMode=localHeadphoneMode || remoteBinaural;
   const hrtfName=remoteBinaural && !next.hrtfEnabled ? "front" : next.hrtfProfile;
@@ -528,7 +527,7 @@ function applyHrtfAndHeadphone(next, initial=false, previous=null){
   const profile=HeadphoneProfiles.getProfile(next.headphoneModel); const strength=next.headphoneCorrectionEnabled&&localHeadphoneMode?Math.max(0,Math.min(1,next.headphoneCorrectionStrength/100)):0;
   smooth(c.pre.gain,dbToGain(profile.preampDb*strength),ctx.currentTime,initial?0.08:0.18);
   for(let i=0;i<c.filters.length;i++){ const f=c.filters[i],spec=profile.filters[i]||{type:"peaking",frequency:1000,gain:0,q:0.7}; f.type=spec.type; smooth(f.frequency,Math.min(spec.frequency,ctx.sampleRate*0.44),ctx.currentTime,0.15); const q=(spec.type==="lowpass"||spec.type==="highpass")?webAudioResonanceDb(spec.q):spec.q; smooth(f.Q,q,ctx.currentTime,0.15); smooth(f.gain,(spec.gain||0)*strength,ctx.currentTime,0.18); }
-  const calEnabled=Boolean(next.headphoneCalibrationEnabled&&headphoneMode&&AdaptiveV29); const calStrength=calEnabled?Math.max(0,Math.min(1,next.headphoneCalibrationStrength/100)):0;
+  const calEnabled=Boolean(next.headphoneCalibrationEnabled&&localHeadphoneMode&&AdaptiveV29); const calStrength=calEnabled?Math.max(0,Math.min(1,next.headphoneCalibrationStrength/100)):0;
   const cal=AdaptiveV29?.safeCalibrationArray(next.headphoneCalibrationGainsDb)||Array(8).fill(0); const preDb=calEnabled?AdaptiveV29.calibrationPrecutDb(cal,next.headphoneCalibrationStrength):0;
   if(c.calPre)smooth(c.calPre.gain,dbToGain(preDb),ctx.currentTime,initial?0.08:0.18);
   for(let i=0;i<(c.calibrationFilters||[]).length;i++){const f=c.calibrationFilters[i],hz=AdaptiveV29.CALIBRATION_FREQUENCIES[i];f.type="peaking";smooth(f.frequency,Math.min(hz,ctx.sampleRate*0.44),ctx.currentTime,0.12);smooth(f.Q,0.95,ctx.currentTime,0.12);smooth(f.gain,(cal[i]||0)*calStrength,ctx.currentTime,0.18);}
@@ -1344,6 +1343,7 @@ function applySettings(raw, { initial = false, revision = 0, replace = false } =
   applyHrtfAndHeadphone(next, initial, previous);
   void applyOutputSink(next, previous, initial);
   applySpatialLayer(initial, previous);
+  if (nodes.virtualAmp && VirtualAmp?.apply) VirtualAmp.apply(nodes.virtualAmp, next);
   if (!next.reflectionCharacterEnabled) resetReflectionCharacter(0.08); else applyReflectionCharacter({pulse:state.sparkPulse,speechRatio:state.seamSpeechRatio});
   applyAvSync();
   if (nodes.spatialMetrics?.port) { const blocks=AdaptiveV28?.spatialReportBlocks?.(ctx.sampleRate,state.cpuProfile?.spatialReportMs||80,128)||24; nodes.spatialMetrics.port.postMessage({active:Boolean(next.spatialTelemetryEnabled),reportEveryBlocks:blocks,maxLagMs:1.2}); }
@@ -1533,6 +1533,9 @@ async function start({ tabId, streamId, settings, revision = 0, deck = "A", medi
     const spatial3d = SpatialEngine?.createStage ? SpatialEngine.createStage(ctx, transientValley, processingChannels) : { output:transientValley, stage:null };
     const autoLevel = ctx.createGain(); autoLevel.gain.value = 1;
     const adaptiveTrim = ctx.createGain(); adaptiveTrim.gain.value = 1;
+    const virtualAmp = VirtualAmp?.createStage
+      ? await VirtualAmp.createStage(ctx, adaptiveTrim, processingChannels, state.settings)
+      : (() => { const bypass=ctx.createGain(); adaptiveTrim.connect(bypass); return {output:bypass,stage:{available:false,backend:"bypass",error:"virtual-amp-module-unavailable",requestedEnabled:Boolean(state.settings.virtualAmpEnabled),effectiveEnabled:false}}; })();
     const limiter = ctx.createDynamicsCompressor();
     const safetyMeter = await createSafetyMeterNode(ctx);
     const masterSafety = ctx.createGain(); masterSafety.gain.value = 0;
@@ -1543,7 +1546,7 @@ async function start({ tabId, streamId, settings, revision = 0, deck = "A", medi
     headphoneCorrection.output.connect(edgeAccentBand); edgeAccentBand.connect(edgeAccentShaper); edgeAccentShaper.connect(edgeAccentGain); edgeAccentGain.connect(output);
     reflectionCharacter.output.connect(output);
     output.connect(transientValley);
-    transientValley.connect(sharedAnalyser); transientValley.connect(sparkMonitor.node); spatial3d.output.connect(autoLevel); autoLevel.connect(adaptiveTrim); adaptiveTrim.connect(limiter); limiter.connect(safetyMeter.node); safetyMeter.node.connect(masterSafety); const avSync=createAvSyncStage(ctx,masterSafety); avSync.output.connect(ctx.destination);
+    transientValley.connect(sharedAnalyser); transientValley.connect(sparkMonitor.node); spatial3d.output.connect(autoLevel); autoLevel.connect(adaptiveTrim); virtualAmp.output.connect(limiter); limiter.connect(safetyMeter.node); safetyMeter.node.connect(masterSafety); const avSync=createAvSyncStage(ctx,masterSafety); avSync.output.connect(ctx.destination);
 
     state.tabId = tabId; state.stream = stream; state.context = ctx; state.source = source; state.inputMode = inputMode; state.externalActive = inputMode === "external";
     state.nodes = {
@@ -1551,7 +1554,7 @@ async function start({ tabId, streamId, settings, revision = 0, deck = "A", medi
       detailHighpass, detailShaper, detailGain, realityShaper, realityHarmGain, convolver,
       realityReflectionGain, mixBus, voiceMaterial: voiceMaterial.stage, selfDap: selfDap.stage, widthMatrix: width.matrix, perspective: perspective.stage,
       dacMatrix: dacMatrix.stage, dapPre, dapLow, dapHigh, dapDirect, dapShaper, dapHarmGain, dapSum, dapCrossfeed: dapCross.matrix,
-      room: room.stage, integrity: integrity.stage, hrtf: hrtf.stage, headphoneCorrection: headphoneCorrection.stage, reflectionCharacter:reflectionCharacter.stage, compressor, compressorBypass, compressorProcessed, compressorSum, impactHighpass, impactLowpass, impactGain, edgeAccentBand, edgeAccentShaper, edgeAccentGain, output, transientValley, spatial3d:spatial3d.stage, sharedAnalyser, sparkMonitor: sparkMonitor.node, spatialMetrics:spatialMetrics.node, sceneSink, autoLevel, adaptiveTrim, limiter, safetyMeter: safetyMeter.node, masterSafety, avSync:avSync.stage
+      room: room.stage, integrity: integrity.stage, hrtf: hrtf.stage, headphoneCorrection: headphoneCorrection.stage, reflectionCharacter:reflectionCharacter.stage, compressor, compressorBypass, compressorProcessed, compressorSum, impactHighpass, impactLowpass, impactGain, edgeAccentBand, edgeAccentShaper, edgeAccentGain, output, transientValley, spatial3d:spatial3d.stage, sharedAnalyser, sparkMonitor: sparkMonitor.node, spatialMetrics:spatialMetrics.node, sceneSink, autoLevel, adaptiveTrim, virtualAmp:virtualAmp.stage, limiter, safetyMeter: safetyMeter.node, masterSafety, avSync:avSync.stage
     };
     state.noiseWorkletAvailable = noise.available;
     state.safetyMeterAvailable = safetyMeter.available;
@@ -1610,6 +1613,65 @@ async function stopSession(tabId){
   const key=String(tabId),entry=state.tabSessions?.[key];if(!entry)return status();delete state.tabSessions[key];if(entry.stream)for(const t of entry.stream.getTracks()){try{t.stop();}catch{}}if(entry.branch)for(const n of [entry.branch.source,entry.branch.gate]){try{n.disconnect();}catch{}}
   if(state.stream===entry.stream){const next=Object.values(state.tabSessions||{})[0];state.stream=next?.stream||state.streams.A||state.streams.B||state.streams.external||null;}
   if(!Object.keys(state.tabSessions||{}).length&&!state.streams.A&&!state.streams.B&&!state.streams.external)return stop();return status();
+}
+
+async function promoteSessionToDeck({ deck="A", tabId, settings, revision=0 }) {
+  const safeDeck = deck === "B" ? "B" : "A";
+  const otherDeck = safeDeck === "A" ? "B" : "A";
+  if (!Number.isInteger(tabId) || tabId < 0) return { ok:false, error:"invalid promotion request" };
+  if (!state.context || state.context.state === "closed" || !state.nodes?.inputBus) return { ok:false, error:"audio context is not active" };
+  const key = String(tabId);
+  const entry = state.tabSessions?.[key];
+  if (!entry?.stream || !entry?.source) return { ok:false, error:"Multi-Tab session is not active for this tab" };
+  if (state.deckTabIds?.[otherDeck] === tabId) return { ok:false, error:`このタブはすでにDeck ${otherDeck}として使用中です。` };
+
+  let branch = null;
+  const oldStream = state.streams?.[safeDeck] || null;
+  const oldNode = state.deckNodes?.[safeDeck] || null;
+  const oldTabId = state.deckTabIds?.[safeDeck] ?? null;
+  const previousSettings = state.settings;
+  try {
+    // Reuse the already-consumed tab MediaStream. No second tabCapture/getUserMedia call occurs here.
+    branch = AudioModules.createDeckBranch(state.context, entry.source, state.nodes.inputBus);
+    const nextSettings = settings ? sanitizeSettings({ ...state.settings, ...settings, enabled:true, djEnabled:true }) : sanitizeSettings({ ...state.settings, enabled:true, djEnabled:true });
+
+    state.replacingDecks[safeDeck] = true;
+    state.streams[safeDeck] = entry.stream;
+    state.deckNodes[safeDeck] = branch;
+    state.deckTabIds[safeDeck] = tabId;
+    state.settings = nextSettings;
+    state.inputMode = "dj";
+    state.externalActive = false;
+    const rev = Number.isFinite(Number(revision)) ? Number(revision) : 0;
+    if (rev > state.lastSettingsRevision) state.lastSettingsRevision = rev;
+    AudioModules.applyDecks(state.deckNodes, state.settings, state.context);
+
+    // Fade the old Multi-Tab direct lane out, then detach it. The stream/source remain alive as the deck input.
+    if (entry.branch?.gate?.gain) smooth(entry.branch.gate.gain, 0, state.context.currentTime, 0.035);
+    await new Promise((resolve) => setTimeout(resolve, 45));
+    try { entry.branch?.gate?.disconnect(); } catch {}
+    delete state.tabSessions[key];
+
+    if (oldStream && oldStream !== entry.stream) for (const track of oldStream.getTracks()) { try { track.stop(); } catch {} }
+    if (oldNode && oldNode !== branch) for (const n of [oldNode.source,oldNode.low,oldNode.mid,oldNode.high,oldNode.trim,oldNode.xfade]) { try { n.disconnect(); } catch {} }
+    if (state.stream === oldStream || !state.stream) state.stream = entry.stream;
+    state.replacingDecks[safeDeck] = false;
+
+    const track = entry.stream.getAudioTracks()[0];
+    if (track) track.addEventListener("ended", () => {
+      if (!state.replacingDecks?.[safeDeck] && state.streams?.[safeDeck] === entry.stream) void stopDeck(safeDeck);
+    }, { once:true });
+    return { ...status(), promotedSession:true };
+  } catch (error) {
+    state.replacingDecks[safeDeck] = false;
+    state.settings = previousSettings;
+    // Roll back target deck ownership; the original Multi-Tab session remains untouched.
+    state.streams[safeDeck] = oldStream;
+    state.deckNodes[safeDeck] = oldNode;
+    state.deckTabIds[safeDeck] = oldTabId;
+    if (branch && branch !== oldNode) for (const n of [branch.low,branch.mid,branch.high,branch.trim,branch.xfade]) { try { n.disconnect(); } catch {} }
+    return { ok:false, error:error?.message || String(error) };
+  }
 }
 
 async function addDeck({ deck = "A", tabId, streamId, settings, revision = 0 }) {
@@ -1681,6 +1743,9 @@ function status() {
     tabId: state.tabId,
     audioContextState: state.context?.state || "not-created",
     sampleRate,
+    contextLatencyPolicy: state.contextLatencyPolicy,
+    audioContextBaseLatencyMs: Number.isFinite(Number(state.context?.baseLatency)) ? Number(state.context.baseLatency)*1000 : null,
+    audioContextOutputLatencyMs: Number.isFinite(Number(state.context?.outputLatency)) ? Number(state.context.outputLatency)*1000 : null,
     requestedHiRes: state.requestedHiRes,
     hiResActive: Boolean(state.requestedHiRes && sampleRate && sampleRate >= 88200),
     noiseWorkletAvailable: state.noiseWorkletAvailable,
@@ -1710,6 +1775,7 @@ function status() {
     sparkWorkletAvailable: state.sparkWorkletAvailable,
     spatialMetricsAvailable:state.spatialMetricsAvailable, spatialMetrics:state.spatialMetrics, spatialLastReportAtMs:state.spatialLastReportAtMs,
     spatial3d: SpatialDiagnostics?.snapshot ? SpatialDiagnostics.snapshot({settings:state.settings,resolved:state.spatialResolved,params:state.spatialParams,runtime:{fallbackStatus:state.spatialFallbackStatus,wetConnected:state.nodes?.spatial3d?.wetConnected,sinkApplied:state.spatialSinkApplied,sinkError:state.spatialSinkError,outputLabel:state.spatialRuntimeOutputLabel},context:state.context,inputChannels:state.inputChannels}) : null,
+    virtualAmp: VirtualAmp?.snapshot ? VirtualAmp.snapshot(state.nodes?.virtualAmp) : null,
     sparkPulse: Number(state.sparkPulse.toFixed(3)),
     sparkReports: state.sparkReports,
     sparkFallbackActive: Boolean(state.sparkFallbackActive),
@@ -1755,8 +1821,9 @@ function status() {
     headphoneCorrectionEnabled: Boolean(state.settings.headphoneCorrectionEnabled), headphoneModel: state.settings.headphoneModel, headphoneCorrectionStrength: state.settings.headphoneCorrectionStrength,
     headphoneCalibrationEnabled:Boolean(state.settings.headphoneCalibrationEnabled), headphoneCalibrationStrength:state.settings.headphoneCalibrationStrength, headphoneCalibrationGainsDb:[...(state.settings.headphoneCalibrationGainsDb||[])], headphoneCalibrationMode:state.settings.headphoneCalibrationMode,
     headphoneOutputLabel:state.settings.headphoneOutputLabel||"", headphoneOutputDeviceSelected:Boolean(state.settings.headphoneOutputDeviceId), headphoneOutputSinkApplied:Boolean(state.headphoneOutputSinkApplied), headphoneOutputSinkError:state.headphoneOutputSinkError,
+    headphoneEffectiveMode:isLocalHeadphoneIntent(state.settings),
     hrtfEnabled: Boolean(state.settings.hrtfEnabled), hrtfProfile: state.settings.hrtfProfile, hrtfAmount: state.settings.hrtfAmount,
-    hrtfEffectiveEnabled:Boolean(state.settings.hrtfEnabled || (state.settings.spatialEnabled && state.settings.spatialOutputTarget==="sonobus-mobile-headphones")),
+    hrtfEffectiveEnabled:Boolean((state.settings.hrtfEnabled && isLocalHeadphoneIntent(state.settings)) || (state.settings.spatialEnabled && state.settings.spatialOutputTarget==="sonobus-mobile-headphones")),
     hrtfEffectiveProfile:(state.settings.spatialEnabled && state.settings.spatialOutputTarget==="sonobus-mobile-headphones" && !state.settings.hrtfEnabled)?"front":state.settings.hrtfProfile,
     hrtfDatasetFreeParametric:Boolean(state.settings.spatialEnabled && state.settings.spatialOutputTarget==="sonobus-mobile-headphones"),
     orbitKeeperEnabled: state.settings.orbitKeeperEnabled !== false,
@@ -1800,6 +1867,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       case "START": sendResponse(await start(message)); break;
       case "ADD_SESSION": sendResponse(await addSession(message)); break;
       case "STOP_SESSION": sendResponse(await stopSession(message.tabId)); break;
+      case "PROMOTE_SESSION_TO_DECK": sendResponse(await promoteSessionToDeck(message)); break;
       case "VIDEO_TELEMETRY": { state.videoTelemetry[String(message.tabId ?? message.payload?.tabId ?? state.tabId ?? "active")]=message.payload||{}; sendResponse({ok:true}); break; }
       case "ADD_DECK": sendResponse(await addDeck(message)); break;
       case "STOP_DECK": sendResponse(await stopDeck(message.deck)); break;

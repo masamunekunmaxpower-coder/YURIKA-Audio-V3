@@ -2,12 +2,12 @@
   "use strict";
 
   const DAP_MODES = Object.freeze(["off", "reference", "warm", "natural", "tube"]);
-  const SETTINGS_SCHEMA_VERSION = 15;
+  const SETTINGS_SCHEMA_VERSION = 16;
   const SETTINGS_KEYS = Object.freeze([
     "enabled","preset","lowCutHz","bassDb","warmthDb","clarityDb","airDb","outputDb","compressor",
     "detail","width","reality","noiseReduction","spectralFill","hiResMode",
     "dapMode","dapStrength","selfDapEnabled","selfDapStrength","selfDapRestoration","selfDapRestorationCutoffKhz",
-    "perspectiveEnabled","perspectiveDepth","spatialEnabled","spatialMode","spatialDeviceProfile","spatialOutputTarget","spatialOutputDeviceId","spatialOutputLabel","adaptiveSafetyEnabled",
+    "perspectiveEnabled","perspectiveDepth","spatialEnabled","spatialMode","spatialDeviceProfile","spatialOutputTarget","spatialOutputDeviceId","spatialOutputLabel","virtualAmpEnabled","adaptiveSafetyEnabled",
     "sceneEnabled","sceneStrength","sceneExponent","sceneInertia","sparkEnabled","sparkAmount","impactEnabled","impactAmount","seamNaturalizerEnabled","seamNaturalizerAmount","transientValleyEnabled","transientValleyAmount","transientEdgeEnabled","transientEdgeAmount","transientEdgeTone","orbitKeeperEnabled","deviceProfile","multiSpeakerEnabled","multiSpeakerAmount",
     "voiceMaterialEnabled","voiceMaterialAmount","voiceDepthMode","voiceTransparency","voiceAir",
     "headphoneCorrectionEnabled","headphoneModel","headphoneCorrectionStrength","headphoneCalibrationEnabled","headphoneCalibrationStrength","headphoneCalibrationGainsDb","headphoneOutputDeviceId","headphoneOutputLabel","headphoneCalibrationMode","hrtfEnabled","hrtfProfile","hrtfAmount",
@@ -30,6 +30,7 @@
   const SELF_DAP_KEYS = Object.freeze(["selfDapEnabled","selfDapStrength","selfDapRestoration","selfDapRestorationCutoffKhz"]);
   const PERSPECTIVE_KEYS = Object.freeze(["perspectiveEnabled","perspectiveDepth"]);
   const SPATIAL_KEYS = Object.freeze(["spatialEnabled","spatialMode","spatialDeviceProfile","spatialOutputTarget","spatialOutputDeviceId","spatialOutputLabel"]);
+  const VIRTUAL_AMP_KEYS = Object.freeze(["virtualAmpEnabled"]);
   const SAFETY_KEYS = Object.freeze(["adaptiveSafetyEnabled","autoLevelEnabled","autoLevelProfile","autoLevelTargetDbfs"]);
   const SCENE_KEYS = Object.freeze(["sceneEnabled","sceneStrength","sceneExponent","sceneInertia","sparkEnabled","sparkAmount","impactEnabled","impactAmount","seamNaturalizerEnabled","seamNaturalizerAmount","transientValleyEnabled","transientValleyAmount","transientEdgeEnabled","transientEdgeAmount","transientEdgeTone","orbitKeeperEnabled","deviceProfile","multiSpeakerEnabled","multiSpeakerAmount",
     "voiceMaterialEnabled","voiceMaterialAmount","voiceDepthMode","voiceTransparency","voiceAir","headphoneCorrectionEnabled","headphoneModel","headphoneCorrectionStrength","headphoneCalibrationEnabled","headphoneCalibrationStrength","headphoneCalibrationGainsDb","headphoneOutputDeviceId","headphoneOutputLabel","headphoneCalibrationMode","hrtfEnabled","hrtfProfile","hrtfAmount","spatialTelemetryEnabled","reflectionCharacterEnabled","reflectionCharacterAmount","reflectionCharacterMode","avSyncEnabled","avSyncDelayMs"]);
@@ -71,6 +72,7 @@
     spatialOutputTarget: "local",
     spatialOutputDeviceId: "",
     spatialOutputLabel: "",
+    virtualAmpEnabled: true,
     adaptiveSafetyEnabled: true,
     sceneEnabled: false,
     sceneStrength: 55,
@@ -202,6 +204,7 @@
       spatialOutputTarget: ["local","sonobus-mobile-headphones","sonobus-mobile-speaker"].includes(raw.spatialOutputTarget) ? raw.spatialOutputTarget : DEFAULTS.spatialOutputTarget,
       spatialOutputDeviceId: typeof raw.spatialOutputDeviceId === "string" ? raw.spatialOutputDeviceId.slice(0,512) : "",
       spatialOutputLabel: typeof raw.spatialOutputLabel === "string" ? raw.spatialOutputLabel.slice(0,180) : "",
+      virtualAmpEnabled: raw.virtualAmpEnabled !== false,
       adaptiveSafetyEnabled: raw.adaptiveSafetyEnabled !== false,
       sceneEnabled: Boolean(raw.sceneEnabled),
       sceneStrength: clampNumber(raw.sceneStrength, 0, 100, DEFAULTS.sceneStrength),
@@ -477,7 +480,7 @@
 
   globalThis.YurikaAudioCore = Object.freeze({
     DEFAULTS, PRESETS, DAP_MODES, SETTINGS_SCHEMA_VERSION, SETTINGS_KEYS, PRESET_AUDIO_KEYS,
-    VIRTUAL_DAP_KEYS, SELF_DAP_KEYS, PERSPECTIVE_KEYS, SPATIAL_KEYS, SAFETY_KEYS, SCENE_KEYS, DAC_MATRIX_KEYS, ROOM_KEYS, INTEGRITY_KEYS, DJ_KEYS, CARTRIDGE_KEYS, SYSTEM_PRESET_NAMES, MANUAL_EDIT_KEYS, clamp, dbToGain, sanitizeSettings,
+    VIRTUAL_DAP_KEYS, SELF_DAP_KEYS, PERSPECTIVE_KEYS, SPATIAL_KEYS, VIRTUAL_AMP_KEYS, SAFETY_KEYS, SCENE_KEYS, DAC_MATRIX_KEYS, ROOM_KEYS, INTEGRITY_KEYS, DJ_KEYS, CARTRIDGE_KEYS, SYSTEM_PRESET_NAMES, MANUAL_EDIT_KEYS, clamp, dbToGain, sanitizeSettings,
     sanitizeSettingsPatch, sanitizeManualPatch, migrateStoredSettings, applyPreset, applyManualPatch, diffSettings, computeAutoHeadroomDb,
     computeEffectiveOutputDb, dapProfile, perspectiveProfile, widthToMatrix, spectralFillGains, detailMixGain,
     realityMixGains, makeSoftSaturationCurve, classifyStereo, webAudioResonanceDb, isYoutubeUrl

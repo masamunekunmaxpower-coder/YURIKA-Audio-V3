@@ -14,6 +14,53 @@ let canonicalRevision = 0;
 let canonicalLoad = null;
 let actionQueue = Promise.resolve();
 
+const CAPTURE_GRANT_REGISTRY_KEY = "yurikaCaptureGrantRegistryV1";
+
+function tabOrigin(url = "") {
+  try { const u = new URL(url); return (u.protocol === "https:" || u.protocol === "http:") ? u.origin : ""; } catch { return ""; }
+}
+
+async function getCaptureGrantRegistry() {
+  try {
+    const raw = await chrome.storage.session.get(CAPTURE_GRANT_REGISTRY_KEY);
+    const v = raw?.[CAPTURE_GRANT_REGISTRY_KEY];
+    return v && typeof v === "object" ? v : {};
+  } catch { return {}; }
+}
+
+async function setCaptureGrantRegistry(registry) {
+  try { await chrome.storage.session.set({ [CAPTURE_GRANT_REGISTRY_KEY]: registry || {} }); } catch {}
+}
+
+async function currentBrowserTab() {
+  const [tab] = await chrome.tabs.query({ active:true, lastFocusedWindow:true });
+  return tab || null;
+}
+
+async function registerActiveTabGrant() {
+  const tab = await currentBrowserTab();
+  const origin = tabOrigin(tab?.url || "");
+  if (!tab?.id || !origin) return { ok:true, registered:false, tabId:tab?.id ?? null, reason:"current tab is not an http(s) page" };
+  const registry = await getCaptureGrantRegistry();
+  registry[String(tab.id)] = { origin, url:tab.url || "", grantedAt:Date.now() };
+  await setCaptureGrantRegistry(registry);
+  return { ok:true, registered:true, tabId:tab.id, origin, title:tab.title || "" };
+}
+
+async function revokeRecordedTabGrant(tabId) {
+  const registry = await getCaptureGrantRegistry();
+  if (Object.prototype.hasOwnProperty.call(registry, String(tabId))) {
+    delete registry[String(tabId)];
+    await setCaptureGrantRegistry(registry);
+  }
+}
+
+function recordedGrantMatches(registry, tab) {
+  if (!tab?.id) return false;
+  const rec = registry?.[String(tab.id)];
+  return Boolean(rec && rec.origin && rec.origin === tabOrigin(tab.url || ""));
+}
+
 function enqueueAction(task) {
   const run = actionQueue.then(task, task);
   actionQueue = run.catch(() => {});
@@ -47,15 +94,13 @@ async function closeOffscreenIfPresent() {
 }
 
 async function currentYoutubeTab() {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const tab = await currentBrowserTab();
   return tab?.id && isYoutubeUrl(tab.url || "") ? tab : null;
 }
 
 async function currentCapturableTab() {
-  const [tab] = await chrome.tabs.query({ active:true, currentWindow:true });
-  if (!tab?.id) return null;
-  try { const u = new URL(tab.url || ""); if (u.protocol !== "https:" && u.protocol !== "http:") return null; } catch { return null; }
-  return tab;
+  const tab = await currentBrowserTab();
+  return tab?.id && tabOrigin(tab.url || "") ? tab : null;
 }
 
 async function extensionCaptureActive() {
@@ -102,13 +147,22 @@ async function startForTab(tab, settings, { revision = 0 } = {}) {
   if (!tab?.id || !isYoutubeUrl(tab.url || "")) return { ok:false, error:"YouTubeのタブを指定してください。" };
   await ensureOffscreen();
   let st=null; try{st=await chrome.runtime.sendMessage({target:"offscreen",type:"STATUS"});}catch{}
+  if (st?.deckATabId === tab.id || st?.deckBTabId === tab.id) {
+    const deck = st?.deckATabId === tab.id ? "A" : "B";
+    return { ok:false, error:`このタブはDeck ${deck}として使用中です。Multi-Tab DSPへ重複キャプチャはできません。` };
+  }
   if (Array.isArray(st?.sessionTabIds) && st.sessionTabIds.includes(tab.id)) {
     const update=await chrome.runtime.sendMessage({target:"offscreen",type:"UPDATE_SETTINGS",settings:sanitizeSettings(settings),replace:true,revision});
     return {ok:true,reused:true,...(update||{})};
   }
   const cpu=AdaptiveV28?.cpuProfile?.(navigator?.hardwareConcurrency||1)||{maxSessions:1};
   const count=Number(st?.sessionCount)||0; if(count>=cpu.maxSessions)return{ok:false,error:`CPU tier ${cpu.name}: 同時YouTube上限 ${cpu.maxSessions}`};
-  let streamId;try{streamId=await chrome.tabCapture.getMediaStreamId({targetTabId:tab.id});}catch(error){return{ok:false,error:`タブ音声の取得に失敗: ${error?.message||error}`};}
+  let streamId;
+  try { streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId:tab.id }); }
+  catch (error) {
+    await revokeRecordedTabGrant(tab.id);
+    return { ok:false, error:`タブ音声の取得に失敗: ${error?.message||error} / 対象タブを前面に出してYURIKAを一度開き、Capture Readyにしてから再試行してください。` };
+  }
   return (await chrome.runtime.sendMessage({target:"offscreen",type:"ADD_SESSION",tabId:tab.id,streamId,settings:sanitizeSettings({...settings,enabled:true}),revision}))||{ok:false,error:"DSP側から応答がありません。"};
 }
 async function startForActiveTab(settings, { forceRestart = false, revision = 0 } = {}) {
@@ -122,27 +176,90 @@ async function stopTabSession(tabId){
 }
 async function listYoutubeTabs(){
   const tabs=await chrome.tabs.query({}); let st={};try{st=await chrome.runtime.sendMessage({target:"offscreen",type:"STATUS"})||{};}catch{}
+  const current=await currentBrowserTab();
+  const registry=await getCaptureGrantRegistry();
   const activeIds=new Set(st.sessionTabIds||[]);const cpu=AdaptiveV28?.cpuProfile?.(navigator?.hardwareConcurrency||1)||{name:"conservative",maxSessions:1,logicalProcessors:1};
-  return {ok:true,tabs:tabs.filter(t=>t.id&&isYoutubeUrl(t.url||"")).map(t=>({id:t.id,title:t.title||"YouTube",url:t.url||"",active:activeIds.has(t.id)})),sessionCount:activeIds.size,cpuProfile:cpu};
+  return {ok:true,tabs:tabs.filter(t=>t.id&&isYoutubeUrl(t.url||"")).map(t=>({
+    id:t.id,title:t.title||"YouTube",url:t.url||"",active:activeIds.has(t.id),
+    current:t.id===current?.id,
+    deck: st?.deckATabId===t.id ? "A" : st?.deckBTabId===t.id ? "B" : "",
+    captureReady:activeIds.has(t.id)||recordedGrantMatches(registry,t)
+  })),sessionCount:activeIds.size,cpuProfile:cpu};
 }
 
 async function armDeck(deck) {
   await loadCanonical();
   const safeDeck = deck === "B" ? "B" : "A";
+  const otherDeck = safeDeck === "A" ? "B" : "A";
   const tab = await currentCapturableTab();
   if (!tab) return { ok:false, error:"通常のWebタブを開いてからDeckへ割り当ててください。" };
   await ensureOffscreen();
+
+  let st = null;
+  try { st = await chrome.runtime.sendMessage({ target:"offscreen", type:"STATUS" }); } catch {}
+  const targetDeckTabId = safeDeck === "A" ? st?.deckATabId : st?.deckBTabId;
+  const otherDeckTabId = otherDeck === "A" ? st?.deckATabId : st?.deckBTabId;
+
+  if (otherDeckTabId === tab.id) {
+    return { ok:false, error:`このタブはすでにDeck ${otherDeck}として使用中です。同じタブをDeck A/Bへ二重割り当てはできません。` };
+  }
+
   const previous = canonicalSettings;
   canonicalSettings = sanitizeSettings({ ...canonicalSettings, enabled:true, djEnabled:true });
   let revision = nextRevision(); await persistCanonical();
+
+  // Idempotent re-arm of the same deck/tab: update settings only. A second tabCapture request would fail.
+  if (targetDeckTabId === tab.id) {
+    let runtime;
+    try { runtime = await chrome.runtime.sendMessage({ target:"offscreen", type:"UPDATE_SETTINGS", settings:canonicalSettings, replace:true, revision }); }
+    catch (error) { runtime = { ok:false, error:error?.message || String(error) }; }
+    if (!runtime?.ok) {
+      canonicalSettings = previous; revision = nextRevision(); await persistCanonical();
+      return { ok:false, error:runtime?.error || `Deck ${safeDeck} settings update failed`, settings:canonicalSettings, revision };
+    }
+    return { ok:true, reused:true, settings:canonicalSettings, revision, runtime };
+  }
+
+  // If Multi-Tab DSP already owns this tab's MediaStream, transfer that live stream to the deck.
+  // Chrome explicitly rejects a second tabCapture for a tab with an active stream.
+  if (Array.isArray(st?.sessionTabIds) && st.sessionTabIds.includes(tab.id)) {
+    let runtime;
+    try {
+      runtime = await chrome.runtime.sendMessage({ target:"offscreen", type:"PROMOTE_SESSION_TO_DECK", deck:safeDeck, tabId:tab.id, settings:canonicalSettings, revision });
+    } catch (error) {
+      runtime = { ok:false, error:error?.message || String(error) };
+    }
+    if (!runtime?.ok) {
+      canonicalSettings = previous; revision = nextRevision(); await persistCanonical();
+      if (!previous.enabled) await closeOffscreenIfPresent();
+      return { ok:false, error:runtime?.error || `Deck ${safeDeck} promotion failed`, settings:canonicalSettings, revision };
+    }
+    return { ok:true, promoted:true, settings:canonicalSettings, revision, runtime };
+  }
+
+  // Defensive collision check for a capture that exists but is not represented by our live offscreen ownership state.
+  try {
+    const captured = await chrome.tabCapture.getCapturedTabs();
+    const collision = captured.find((x) => x.tabId === tab.id && (x.status === "active" || x.status === "pending"));
+    if (collision) {
+      canonicalSettings = previous; revision = nextRevision(); await persistCanonical();
+      return { ok:false, error:`Deck ${safeDeck}: このタブには既存のキャプチャ (${collision.status}) があります。YURIKAのMulti-Tab/Deck割り当てを解除してから再試行してください。`, settings:canonicalSettings, revision };
+    }
+  } catch {}
+
   let streamId;
   try {
     streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId:tab.id });
   } catch (error) {
+    await revokeRecordedTabGrant(tab.id);
     canonicalSettings = previous;
     revision = nextRevision(); await persistCanonical();
     if (!previous.enabled) await closeOffscreenIfPresent();
-    return { ok:false, error:`Deck ${safeDeck} capture failed: ${error?.message || error}`, settings:canonicalSettings, revision };
+    const msg = String(error?.message || error || "");
+    const collisionHint = /active stream/i.test(msg)
+      ? "このタブはすでに別のYURIKA入力で使用中です。Multi-Tab DSPなら解除せず、そのままDeckへ再適用すると自動昇格します。"
+      : "このタブでYURIKAを開き直してCapture Readyにしてから再試行してください。";
+    return { ok:false, error:`Deck ${safeDeck} capture failed: ${msg} / ${collisionHint}`, settings:canonicalSettings, revision };
   }
   let runtime;
   try {
@@ -349,12 +466,25 @@ async function getCanonicalSettings() {
   return { ok: true, settings: canonicalSettings, revision: canonicalRevision };
 }
 
+try {
+  chrome.tabs.onRemoved.addListener((tabId) => { void revokeRecordedTabGrant(tabId); });
+  chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    if (!changeInfo?.url) return;
+    void (async () => {
+      const registry = await getCaptureGrantRegistry();
+      const rec = registry?.[String(tabId)];
+      if (rec && rec.origin !== tabOrigin(tab?.url || changeInfo.url || "")) await revokeRecordedTabGrant(tabId);
+    })();
+  });
+} catch {}
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (!message || message.target !== "service-worker") return false;
-  const serialized = new Set(["GET_SETTINGS", "APPLY_PATCH", "APPLY_PRESET", "SET_ENABLED", "LIST_YOUTUBE_TABS", "SET_TAB_SESSION", "ARM_DECK", "STOP_DECK", "START_EXTERNAL", "AUTO_MIX", "START", "RESTART", "STOP", "UPDATE_SETTINGS", "SPATIAL_RUNTIME_PATCH", "OFFSCREEN_ENDED"]);
+  const serialized = new Set(["GET_SETTINGS", "REGISTER_ACTIVE_TAB_GRANT", "APPLY_PATCH", "APPLY_PRESET", "SET_ENABLED", "LIST_YOUTUBE_TABS", "SET_TAB_SESSION", "ARM_DECK", "STOP_DECK", "START_EXTERNAL", "AUTO_MIX", "START", "RESTART", "STOP", "UPDATE_SETTINGS", "SPATIAL_RUNTIME_PATCH", "OFFSCREEN_ENDED"]);
   const run = async () => {
     switch (message.type) {
       case "GET_SETTINGS": return getCanonicalSettings();
+      case "REGISTER_ACTIVE_TAB_GRANT": return registerActiveTabGrant();
       case "APPLY_PATCH": return applyManualSettingsPatch(message.patch || {});
       case "APPLY_PRESET": return applyExplicitPreset(message.name);
       case "SET_ENABLED": return setCanonicalEnabled(message.enabled);

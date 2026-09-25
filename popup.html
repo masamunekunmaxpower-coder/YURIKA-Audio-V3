@@ -41,6 +41,23 @@
       <p class="note">既存DSPの後段・Safety/Limiterの前に独立追加します。OFF時は旧DSPをDry経路で通し、ON/OFFは短いequal-power遷移。SonoBus → Smartphone Headphones/IEMでは外部HRTFデータ不要の軽量パラメトリックHRTFを自動適用します。ブラウザーからSonoBusの遠隔端末そのものは検出できないため、PC側の出力先（例: 仮想オーディオ経路）は「出力デバイス選択」で指定します。</p>
     </details>
 
+    <details open class="virtual-amp-panel">
+      <summary>Virtual Class-A Amplifier</summary>
+      <section class="row">
+        <label class="check"><input id="virtualAmpEnabled" type="checkbox"> Internal Class-A Amp / Auto Apply</label>
+      </section>
+      <section class="status" id="virtualAmpState">Amp: status pending</section>
+      <div class="amp-spec-grid">
+        <span>Reference rated</span><strong>8 W/ch @ 6Ω</strong>
+        <span>Practical max</span><strong>12 W/ch @ 6Ω</strong>
+        <span>S/N</span><strong>122 dB(A)</strong>
+        <span>Amp THD+N add</span><strong>-100 dB nominal</strong>
+        <span>Output Z / DF</span><strong>0.020Ω / 300</strong>
+        <span>Latency</span><strong>0-frame algorithmic</strong>
+      </div>
+      <p class="note">C++→WebAssemblyでAudioWorklet内に常駐するソフトウェア基準モデルです。物理的にPCが6Ωへ8W/12Wを出力する意味ではありません。周波数特性は既存YURIKA DSPを継承し、追加EQは行いません。WASM/Worklet失敗時は自動BYPASSして音を止めず、状態と理由をここに表示します。Neutral (Flat)では既存の透明性ゲートを守るため残留歪み/ノイズを自動BYPASSします。</p>
+    </details>
+
     <section>
       <label class="label" for="preset">プリセット</label>
       <select id="preset">
@@ -278,9 +295,10 @@
       <section class="sliders compact"><label>Audio delay <output id="avSyncDelayMsOut">0.0 ms</output><input id="avSyncDelayMs" type="range" min="0" max="150" step="0.1"></label></section>
       <p class="note">Reflection Characterは壁の物理反射率を変えません。A/V補正は音声が映像より先行するときだけ追加遅延で合わせます。OFF時は保存済みDelay値を実遅延・診断値へ加算しません。</p>
       <section class="status" id="cpuSchedulerState">CPU scheduler: --</section>
+      <section class="status mix-action-status" id="mixActionStatus" data-state="idle">Mix操作: 待機中</section>
       <div id="multiTabList" class="diagnostics"></div>
       <button id="refreshTabs" class="secondary">YouTubeタブ一覧を更新</button>
-      <p class="note">各YouTubeタブを独立ON/OFFできます。同時処理上限はCPU論理プロセッサ数から保守的に決めます。ブラウザのAudioWorkletを特定CPUコアへ固定する機能ではありません。</p>
+      <p class="note">各YouTubeタブを独立ON/OFFできます。ただしChromeのtabCapture仕様上、背景タブをいきなりキャプチャはできません。未登録タブは一度そのタブを前面に出してYURIKAを開くとCapture Readyになります。同時処理上限はCPU論理プロセッサ数から保守的に決めます。ブラウザのAudioWorkletを特定CPUコアへ固定する機能ではありません。</p>
     </details>
 
     <details>
@@ -300,7 +318,7 @@
         <label>B High <output id="deckBHighDbOut">0.0</output><input id="deckBHighDb" type="range" min="-12" max="12" step="0.1"></label>
       </section>
       <section class="button-grid"><button id="autoMixAB">AUTO MIX A → B</button><button id="autoMixBA">AUTO MIX B → A</button></section>
-      <p class="note">2つのタブを順番にArmして同時再生・EQ・equal-power crossfadeします。AUTO MIXは指定秒数で自動遷移します。Webページ自体の再生/一時停止やBPM/beat同期は操作しません。</p>
+      <p class="note">Deck A/Bは現在前面にある通常Webタブを割り当てます。対象タブでYURIKAを開いた直後ならChromeのactiveTab許可を使ってArmできます。2つのタブを順番にArmして同時再生・EQ・equal-power crossfadeします。AUTO MIXは指定秒数で自動遷移します。Webページ自体の再生/一時停止やBPM/beat同期は操作しません。</p>
     </details>
 
     <details>
@@ -362,6 +380,13 @@
         <div><span>Spatial Gain Comp</span><output id="diagSpatialGain">--</output></div>
         <div><span>Spatial Headroom</span><output id="diagSpatialHeadroom">--</output></div>
         <div><span>Spatial Fallback</span><output id="diagSpatialFallback">--</output></div>
+        <div><span>Virtual Amp</span><output id="diagAmpState">--</output></div>
+        <div><span>Amp Backend</span><output id="diagAmpBackend">--</output></div>
+        <div><span>Amp Reference Power</span><output id="diagAmpPower">--</output></div>
+        <div><span>Amp THD+N Add</span><output id="diagAmpThdn">--</output></div>
+        <div><span>Amp S/N</span><output id="diagAmpSnr">--</output></div>
+        <div><span>Amp Added Latency</span><output id="diagAmpLatency">--</output></div>
+        <div><span>Amp Fault</span><output id="diagAmpFault">none</output></div>
       </section>
       <p class="note">L/R相関は診断用です。mono-likeは「一定時間ほぼ同一波形だった」という推定で、音源そのものが常にモノラルだと断定する表示ではありません。SpatialのStrength/Width/Depth/ITD/ILD/Reflection/Headroomは設定から導出した制御値です。Peak/RMS/L/R相関は既存Diagnosticsの実測値です。Spatial Added Latencyの「0 ms*」は全信号を遅延させる直列遅延が無いという構成値で、実機I/O遅延の測定値ではありません。</p>
     </details>

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "YURIKA Audio - GIRO MONATIUM 3.2.1",
-  "version": "3.2.1",
-  "description": "YURIKA Audio GIRO MONATIUM with device-aware 3D Spatial, dataset-free parametric remote-mobile HRTF for SonoBus routes, preserved legacy DSP and safety diagnostics.",
+  "name": "YURIKA Audio - GIRO MONATIUM 3.2.7",
+  "version": "3.2.7",
+  "description": "YURIKA Audio GIRO MONATIUM 3.2.7 — internal C++/WASM Class-A virtual amplifier, HRTF/headphone latency/SonoBus stability fixes.",
   "minimum_chrome_version": "116",
   "permissions": [
     "storage",
@@ -30,7 +30,7 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "version_name": "3.2.1 Remote Mobile Low-Latency / 3D Spatial / GIRO MONATIUM",
+  "version_name": "3.2.7 Internal C++/WASM Class-A Virtual Amplifier",
   "host_permissions": [
     "https://www.youtube.com/*",
     "https://youtube.com/*",
@@ -48,5 +48,8 @@
       ],
       "run_at": "document_idle"
     }
-  ]
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"
+  }
 }
