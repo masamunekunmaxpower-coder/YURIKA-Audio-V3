@@ -1,0 +1,21 @@
+{
+  "sample_rate": 48000,
+  "segments": {
+    "silence_pre": {
+      "start": 0.0,
+      "end": 0.25
+    },
+    "sweep": {
+      "start": 0.25,
+      "end": 1.25
+    },
+    "sine": {
+      "start": 1.25,
+      "end": 3.25
+    },
+    "silence_post": {
+      "start": 3.25,
+      "end": 3.5
+    }
+  }
+}

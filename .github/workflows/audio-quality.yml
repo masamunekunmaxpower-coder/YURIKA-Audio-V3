@@ -70,7 +70,12 @@ jobs:
         run: python tests/audio_quality/generate_specialized_stimuli.py
 
       - name: Specialized analyzer self-test
-        run: python tests/audio_quality/specialized_analyzer_selftest.py
+        run: |
+          python tests/audio_quality/specialized_analyzer_selftest.py
+          python tests/audio_quality/adaptive_debug_analyzer_selftest.py
+
+      - name: Generate adaptive-control debug stimulus
+        run: python tests/audio_quality/generate_control_debug_stimulus.py
 
       - name: Install Playwright Chromium
         run: |
@@ -89,6 +94,12 @@ jobs:
       - name: Analyze 3D localization, SonoBus and Virtual Amp benches
         run: python tests/audio_quality/specialized_metrics.py
 
+      - name: Render Self-DAP and SonoBus adaptive-control ablations
+        run: node tests/audio_quality/run_adaptive_debug_playwright.mjs
+
+      - name: Analyze Self-DAP and SonoBus adaptive-control ablations
+        run: python tests/audio_quality/adaptive_debug_metrics.py
+
       - name: Job summary
         if: always()
         shell: bash
@@ -99,6 +110,16 @@ jobs:
           if [ -f tests/audio_quality/results/specialized-report.md ]; then
             echo >> "$GITHUB_STEP_SUMMARY"
             cat tests/audio_quality/results/specialized-report.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -f tests/audio_quality/results/adaptive-debug-report.md ]; then
+            echo >> "$GITHUB_STEP_SUMMARY"
+            cat tests/audio_quality/results/adaptive-debug-report.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -f tests/audio_quality/results/adaptive-debug-render-failure.json ]; then
+            echo '### Adaptive debug render failure diagnostic' >> "$GITHUB_STEP_SUMMARY"
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            cat tests/audio_quality/results/adaptive-debug-render-failure.json >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
           fi
           if [ -f tests/audio_quality/results/specialized-render-failure.json ]; then
             echo '### Specialized render failure diagnostic' >> "$GITHUB_STEP_SUMMARY"

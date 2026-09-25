@@ -1,10 +1,10 @@
 ﻿{
     "version":  "3.3.0",
-    "evaluator":  "YURIKA_AUDIO_QUALITY_V2_2_SPATIAL_SONOBUS_AMP",
+    "evaluator":  "YURIKA_AUDIO_QUALITY_V2_3_SELFDAP_SONOBUS_DEBUG",
     "managedFileCount":  61,
     "schema":  1,
     "sourceZip":  "YURIKA_Audio_GIRO_MONATIUM_3.3.0_CHROME_EXTENSION.zip",
     "name":  "YURIKA Audio - GIRO MONATIUM 3.3.0",
-    "appliedAt":  "2026-09-25T17:35:59.0138537+09:00",
+    "appliedAt":  "2026-09-25T17:37:41.8661936+09:00",
     "sha256":  "56599046cca23a47677600d9fc5550000bf2be770257c53b1b95c57574b17a36"
 }
