@@ -350,7 +350,11 @@ def amp_analysis():
     adiag=status.get('virtualAmp') or {}
     critical=[]; warnings=[]
     if adiag:
-        if adiag.get('backend')!='cpp-wasm': critical.append('Virtual Amp backend is not cpp-wasm')
+        backend=str(adiag.get('backend') or '')
+        # Accept the C++/WASM backend family. 3.5.1 appends subsystem labels
+        # such as '+opamp' while the underlying amp core remains C++/WASM.
+        if not backend.startswith('cpp-wasm'):
+            critical.append(f'Virtual Amp backend is not cpp-wasm family: {backend or "missing"}')
         if not adiag.get('effectiveEnabled'): critical.append('Virtual Amp was not effectively enabled')
         if adiag.get('error'): critical.append(f"Virtual Amp runtime fault: {adiag.get('error')}")
     if nonfinite: critical.append('amp output contains non-finite samples')
