@@ -41,10 +41,34 @@
       <p class="note">既存DSPの後段・Safety/Limiterの前に独立追加します。OFF時は旧DSPをDry経路で通し、ON/OFFは短いequal-power遷移。SonoBus → Smartphone Headphones/IEMでは外部HRTFデータ不要の軽量パラメトリックHRTFを自動適用します。ブラウザーからSonoBusの遠隔端末そのものは検出できないため、PC側の出力先（例: 仮想オーディオ経路）は「出力デバイス選択」で指定します。</p>
     </details>
 
+    <details open class="spatial-panel concert-hall-panel">
+      <summary>CONCERT HALL / Digital Acoustic Venue</summary>
+      <section class="row"><label class="check spatial-master"><input id="concertHallEnabled" type="checkbox"> CONCERT HALL</label>
+        <label>Hall<select id="concertHallMode"><option value="reference-shoebox">Reference Shoebox</option><option value="vineyard">Vineyard</option><option value="chamber">Chamber</option><option value="opera">Opera</option></select></label>
+        <label>Seat<select id="concertHallSeat"><option value="front">Front</option><option value="center">Center</option><option value="rear">Rear</option><option value="balcony">Balcony</option></select></label></section>
+      <section class="sliders compact"><label>Hall Amount <output id="concertHallAmountOut">55.0</output><input id="concertHallAmount" type="range" min="0" max="100" step="0.1"></label><label>Audience / Absorption <output id="concertHallOccupancyOut">70.0</output><input id="concertHallOccupancy" type="range" min="0" max="100" step="1"></label></section>
+      <p class="note">Reference Shoeboxは約2.05 sのRT60目標、側方初期反射、拡散した後期残響を合成します。出力先がHeadphone/IEM/Speaker等かでWet量と高域減衰を自動調整します。Dry直達音には固定遅延を入れません。</p>
+    </details>
+
+    <details open class="r5-reality-panel">
+      <summary>R5 Reality Resolution / (v+w+x+y+z)^5</summary>
+      <section class="row">
+        <label class="check"><input id="r5RealityEnabled" type="checkbox"> R5 Microstructure Reconstruction</label>
+        <label>Mode<select id="r5RealityMode"><option value="auto">Auto</option><option value="voice">Voice Focus</option><option value="full">Full Material</option></select></label>
+      </section>
+      <section class="sliders compact"><label>R5 Amount <output id="r5RealityAmountOut">35.0</output><input id="r5RealityAmount" type="range" min="0" max="100" step="0.1"></label></section>
+      <section class="status" id="r5RealityState">R5: status pending</section>
+      <p class="note">v=時間速度、w=波形曲率、x=短期予測残差、y=微小包絡差、z=左右micro-coherence。正規化した特徴の (v+w+x+y+z)^5 を直接音声へ掛けず、予測残差から作る微細成分のconfidence gateとして使います。0-lookahead。失われた録音情報の完全復元を保証するものではありません。</p>
+    </details>
+
     <details open class="virtual-amp-panel">
       <summary>Virtual Class-A Amplifier</summary>
       <section class="row">
         <label class="check"><input id="virtualAmpEnabled" type="checkbox"> Internal Class-A Amp / Auto Apply</label>
+        <label class="check"><input id="virtualAmpOpAmpEnabled" type="checkbox"> Linked Op-Amp Servo</label>
+      </section>
+      <section class="sliders compact">
+        <label>P1dB-equivalent Headroom <output id="virtualAmpHeadroomDbOut">12.0 dB</output><input id="virtualAmpHeadroomDb" type="range" min="0" max="18" step="0.5"></label>
       </section>
       <section class="status" id="virtualAmpState">Amp: status pending</section>
       <div class="amp-spec-grid">
@@ -55,7 +79,14 @@
         <span>Output Z / DF</span><strong>0.020Ω / 300</strong>
         <span>Latency</span><strong>0-frame algorithmic</strong>
       </div>
-      <p class="note">C++→WebAssemblyでAudioWorklet内に常駐するソフトウェア基準モデルです。物理的にPCが6Ωへ8W/12Wを出力する意味ではありません。周波数特性は既存YURIKA DSPを継承し、追加EQは行いません。WASM/Worklet失敗時は自動BYPASSして音を止めず、状態と理由をここに表示します。Neutral (Flat)では既存の透明性ゲートを守るため残留歪み/ノイズを自動BYPASSします。</p>
+      <p class="note">C++→WebAssembly Class-A基準モデルへ、AudioWorklet内の低遅延Op-Amp帰還/DCサーボを連携します。P1dB Headroomは内部ドライブを前段で下げ、後段で等倍復元して非線形の発生点を上へ移すソフトウェア等価値です。物理的にPCが6Ωへ8W/12Wを出力する意味ではありません。Neutral (Flat)では透明性保護のためAmpを自動BYPASSします。</p>
+    </details>
+
+    <details open class="stem-panel">
+      <summary>Low-Latency 5-Stem Separator</summary>
+      <section class="row"><label class="check"><input id="stemSeparationEnabled" type="checkbox"> Bass / Drums / Voice / Effects / Ambient split</label></section>
+      <section class="status" id="stemState">Stems: status pending</section>
+      <p class="note">0-lookaheadの決定論的ソフト分離です。5バスの和が元信号へ戻るよう残差信号を配分し、追加の直列遅延を入れません。AIステムモデルのような意味論的な完全分離を保証する機構ではないため、診断には分離比と再構成誤差を表示します。</p>
     </details>
 
     <section>
@@ -381,15 +412,43 @@
         <div><span>Spatial Gain Comp</span><output id="diagSpatialGain">--</output></div>
         <div><span>Spatial Headroom</span><output id="diagSpatialHeadroom">--</output></div>
         <div><span>Spatial Fallback</span><output id="diagSpatialFallback">--</output></div>
+        <div><span>Concert Hall</span><output id="diagHallState">OFF</output></div>
+        <div><span>Hall Mode</span><output id="diagHallMode">--</output></div>
+        <div><span>Hall Seat</span><output id="diagHallSeat">--</output></div>
+        <div><span>Hall RT60</span><output id="diagHallRt60">--</output></div>
+        <div><span>Hall Wet Pre-delay</span><output id="diagHallPredelay">--</output></div>
+        <div><span>Hall Early / Late</span><output id="diagHallBalance">--</output></div>
+        <div><span>Hall Diffusion</span><output id="diagHallDiffuse">--</output></div>
+        <div><span>Hall Audience / Absorption</span><output id="diagHallOccupancy">--</output></div>
+        <div><span>Hall Output Adapt</span><output id="diagHallOutput">--</output></div>
+        <div><span>Hall Direct / Wet</span><output id="diagHallWet">--</output></div>
+        <div><span>Hall Added Serial Latency</span><output id="diagHallLatency">--</output></div>
+        <div><span>Hall Backend</span><output id="diagHallBackend">--</output></div>
+        <div><span>R5 Reality</span><output id="diagR5State">OFF</output></div>
+        <div><span>R5 Feature RMS v/w/x/y/z</span><output id="diagR5Features">--</output></div>
+        <div><span>R5 5th Interaction</span><output id="diagR5Interaction">--</output></div>
+        <div><span>R5 Confidence</span><output id="diagR5Confidence">--</output></div>
+        <div><span>R5 Detail Injection</span><output id="diagR5Injection">--</output></div>
+        <div><span>R5 Added Latency</span><output id="diagR5Latency">--</output></div>
         <div><span>Virtual Amp</span><output id="diagAmpState">--</output></div>
         <div><span>Amp Backend</span><output id="diagAmpBackend">--</output></div>
-        <div><span>Amp Reference Power</span><output id="diagAmpPower">--</output></div>
-        <div><span>Amp THD+N Add</span><output id="diagAmpThdn">--</output></div>
-        <div><span>Amp S/N</span><output id="diagAmpSnr">--</output></div>
+        <div><span>Amp Dynamic Power</span><output id="diagAmpPower">--</output></div>
+        <div><span>Amp P1dB-equivalent</span><output id="diagAmpP1db">--</output></div>
+        <div><span>Amp Op-Amp</span><output id="diagAmpOpAmp">--</output></div>
+        <div><span>Amp THD+N model</span><output id="diagAmpThdn">--</output></div>
+        <div><span>Amp S/N model</span><output id="diagAmpSnr">--</output></div>
+        <div><span>Amp I/O Level</span><output id="diagAmpLevel">--</output></div>
         <div><span>Amp Added Latency</span><output id="diagAmpLatency">--</output></div>
         <div><span>Amp Fault</span><output id="diagAmpFault">none</output></div>
+        <div><span>5-Stem State</span><output id="diagStemState">--</output></div>
+        <div><span>Stem Bass</span><output id="diagStemBass">--</output></div>
+        <div><span>Stem Drums</span><output id="diagStemDrums">--</output></div>
+        <div><span>Stem Voice</span><output id="diagStemVoice">--</output></div>
+        <div><span>Stem Effects</span><output id="diagStemEffects">--</output></div>
+        <div><span>Stem Ambient</span><output id="diagStemAmbient">--</output></div>
+        <div><span>Stem Reconstruction</span><output id="diagStemRecon">--</output></div>
       </section>
-      <p class="note">L/R相関は診断用です。mono-likeは「一定時間ほぼ同一波形だった」という推定で、音源そのものが常にモノラルだと断定する表示ではありません。SpatialのStrength/Width/Depth/ITD/ILD/Reflection/Headroomは設定から導出した制御値です。Peak/RMS/L/R相関は既存Diagnosticsの実測値です。Spatial Added Latencyの「0 ms*」は全信号を遅延させる直列遅延が無いという構成値で、実機I/O遅延の測定値ではありません。</p>
+      <p class="note">L/R相関は診断用です。mono-likeは「一定時間ほぼ同一波形だった」という推定で、音源そのものが常にモノラルだと断定する表示ではありません。SpatialのStrength/Width/Depth/ITD/ILD/Reflection/Headroomは設定から導出した制御値です。Peak/RMS/L/R相関は既存Diagnosticsの実測値です。Spatial/Hall/Amp/Stemの「0 ms*」は追加lookaheadまたはDry直達への固定直列遅延が無いという構成値です。HallのWet側pre-delay/反射時間は音場生成そのもので、OS/デバイスI/O遅延とは別です。AmpのP1dB/電力/SN/THD+Nはソフトウェア基準モデルからの動的推定で、物理アンプの実測値ではありません。</p>
     </details>
 
     <p class="note">Adaptive Safetyは通常時は0 dBで音を変えず、Limiterが継続的に働く場合のみ前段を少し下げて潰れすぎを防ぎます。Hi-Resは96kHz AudioContextを要求し、倍音処理を4x oversamplingします。ブラウザはPCM処理のため真のDSD 1-bit再生ではありません。Detail/Reality/Frequency Fillは元音源に無い情報を復元せず、聴感を補正します。ノイズ抑制は静かな区間を中心に働きます。</p>

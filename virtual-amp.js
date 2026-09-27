@@ -2,12 +2,15 @@
 
 (() => {
   const SPEC = Object.freeze({
-    id:"yurika-class-a-reference-v1",
-    topology:"Ultra-Clean Class-A / crossover-free software reference electrical model",
+    id:"yurika-class-a-reference-v2",
+    topology:"Ultra-Clean Class-A + linked op-amp servo / crossover-free software reference electrical model",
     loadOhm:6,
     ratedPowerWPerChannel:8,
     maxPowerWPerChannel:12,
+    zeroDbfsReferencePowerWPerChannel:12,
     ratedLevelDbfs:-1.7609125906,
+    p1dBReferenceDbfs:-0.75,
+    p1dBHeadroomMaxDb:18,
     outputImpedanceOhm:0.020,
     dampingFactor:300,
     snrDbA:122,
@@ -17,14 +20,17 @@
     dcOffsetMvMax:0.2,
     responseDeviationDb20Hz20kHz:0.02,
     algorithmicLatencyFrames:0,
-    transitionMs:6,
+    transitionMs:4,
     cubic:0.0000600,
     noise:0.00000080,
-    crosstalk:0.00000100
+    crosstalk:0.00000100,
+    opAmpFeedback:0.42,
+    opAmpDcServoHz:1.5
   });
 
   let modulePromise = null;
   const workletContexts = new WeakSet();
+  const dbToGain = (db) => Math.pow(10, Number(db || 0) / 20);
 
   function combineThdnDb(upstreamDb, ampDb = SPEC.ampOnlyThdnDb) {
     const a = Number(upstreamDb), b = Number(ampDb);
@@ -55,7 +61,7 @@
     const stage = {
       input, output:fallback, node:null, available:false, backend:"bypass", error:null,
       requestedEnabled:false, effectiveEnabled:false, neutralBypass:false, mix:0,
-      spec:SPEC
+      opAmpEnabled:false, headroomExtensionDb:0, runtime:{}, spec:SPEC
     };
     try {
       const wasmModule = await prepare(ctx);
@@ -65,12 +71,12 @@
         outputChannelCount:[count], channelCountMode:"explicit", channelInterpretation:"speakers",
         processorOptions:{ wasmModule }
       });
-      stage.node = node; stage.output = node; stage.available = true; stage.backend = "cpp-wasm";
+      stage.node = node; stage.output = node; stage.available = true; stage.backend = "cpp-wasm+opamp";
       node.port.onmessage = (event) => {
         const msg = event?.data || {};
         if (msg.type === "error") { stage.error = String(msg.error || "Virtual Amp runtime error"); stage.backend = "bypass"; stage.effectiveEnabled = false; }
-        else if (msg.type === "ready") { stage.error = null; stage.backend = msg.backend || "cpp-wasm"; }
-        else if (msg.type === "runtime") { stage.mix = Number(msg.mix || 0); }
+        else if (msg.type === "ready") { stage.error = null; stage.backend = msg.backend || "cpp-wasm+opamp"; }
+        else if (msg.type === "runtime") { stage.mix = Number(msg.mix || 0); stage.runtime = {...msg}; }
       };
       input.connect(node);
       apply(stage, settings);
@@ -87,13 +93,26 @@
     const requested = Boolean(settings.virtualAmpEnabled);
     const neutralBypass = String(settings.preset || "") === "flat";
     const effective = requested && !neutralBypass && stage.available && Boolean(stage.node);
+    const headroomExtensionDb = Math.max(0, Math.min(SPEC.p1dBHeadroomMaxDb, Number(settings.virtualAmpHeadroomDb ?? 12) || 0));
+    const preGain = dbToGain(-headroomExtensionDb);
+    const postGain = dbToGain(headroomExtensionDb);
+    const opAmpEnabled = settings.virtualAmpOpAmpEnabled !== false;
     stage.requestedEnabled = requested;
     stage.neutralBypass = requested && neutralBypass;
     stage.effectiveEnabled = effective;
+    stage.opAmpEnabled = opAmpEnabled;
+    stage.headroomExtensionDb = headroomExtensionDb;
     if (stage.node?.port) {
       stage.node.port.postMessage({
         type:"config", enabled:effective,
-        cubic:SPEC.cubic, noise:SPEC.noise, crosstalk:SPEC.crosstalk
+        cubic:SPEC.cubic,
+        noise:SPEC.noise * preGain,
+        crosstalk:SPEC.crosstalk,
+        preGain, postGain, headroomExtensionDb,
+        opAmpEnabled, opAmpFeedback:SPEC.opAmpFeedback, opAmpDcServoHz:SPEC.opAmpDcServoHz,
+        ratedPowerWPerChannel:SPEC.ratedPowerWPerChannel,
+        maxPowerWPerChannel:SPEC.maxPowerWPerChannel,
+        p1dBReferenceDbfs:SPEC.p1dBReferenceDbfs
       });
     }
     return snapshot(stage);
@@ -101,12 +120,26 @@
 
   function snapshot(stage) {
     if (!stage) return { requestedEnabled:false, effectiveEnabled:false, available:false, backend:"missing", error:"stage-missing", spec:SPEC };
+    const rt = stage.runtime || {};
     return {
       requestedEnabled:Boolean(stage.requestedEnabled),
       effectiveEnabled:Boolean(stage.effectiveEnabled),
       neutralBypass:Boolean(stage.neutralBypass),
       available:Boolean(stage.available), backend:stage.backend || "bypass", error:stage.error || null,
       wetMix:Number(stage.mix || 0),
+      opAmpEnabled:Boolean(stage.opAmpEnabled),
+      opAmpFeedback:Number(rt.opAmpFeedback ?? SPEC.opAmpFeedback),
+      headroomExtensionDb:Number(stage.headroomExtensionDb || 0),
+      p1dBEquivalentInputDbfs:Number(rt.p1dBEquivalentInputDbfs ?? (SPEC.p1dBReferenceDbfs + Number(stage.headroomExtensionDb || 0))),
+      p1dBMarginDb:Number.isFinite(Number(rt.p1dBMarginDb)) ? Number(rt.p1dBMarginDb) : null,
+      inputPeak:Number.isFinite(Number(rt.inputPeak)) ? Number(rt.inputPeak) : null,
+      outputPeak:Number.isFinite(Number(rt.outputPeak)) ? Number(rt.outputPeak) : null,
+      inputRms:Number.isFinite(Number(rt.inputRms)) ? Number(rt.inputRms) : null,
+      outputRms:Number.isFinite(Number(rt.outputRms)) ? Number(rt.outputRms) : null,
+      estimatedPowerWPerChannel:Number.isFinite(Number(rt.estimatedPowerWPerChannel)) ? Number(rt.estimatedPowerWPerChannel) : null,
+      estimatedPeakPowerWPerChannel:Number.isFinite(Number(rt.estimatedPeakPowerWPerChannel)) ? Number(rt.estimatedPeakPowerWPerChannel) : null,
+      runtimeSnrDb:Number.isFinite(Number(rt.runtimeSnrDb)) ? Number(rt.runtimeSnrDb) : null,
+      runtimeThdnEstimateDb:Number.isFinite(Number(rt.runtimeThdnEstimateDb)) ? Number(rt.runtimeThdnEstimateDb) : null,
       addedAlgorithmicLatencyFrames:SPEC.algorithmicLatencyFrames,
       addedAlgorithmicLatencyMs:0,
       ampOnlyThdnDb:SPEC.ampOnlyThdnDb,

@@ -2,12 +2,12 @@
   "use strict";
 
   const DAP_MODES = Object.freeze(["off", "reference", "warm", "natural", "tube"]);
-  const SETTINGS_SCHEMA_VERSION = 16;
+  const SETTINGS_SCHEMA_VERSION = 19;
   const SETTINGS_KEYS = Object.freeze([
     "enabled","preset","lowCutHz","bassDb","warmthDb","clarityDb","airDb","outputDb","compressor",
     "detail","width","reality","noiseReduction","spectralFill","hiResMode",
     "dapMode","dapStrength","selfDapEnabled","selfDapStrength","selfDapRestoration","selfDapRestorationCutoffKhz",
-    "perspectiveEnabled","perspectiveDepth","spatialEnabled","spatialMode","spatialDeviceProfile","spatialOutputTarget","spatialOutputDeviceId","spatialOutputLabel","virtualAmpEnabled","adaptiveSafetyEnabled",
+    "perspectiveEnabled","perspectiveDepth","spatialEnabled","spatialMode","spatialDeviceProfile","spatialOutputTarget","spatialOutputDeviceId","spatialOutputLabel","concertHallEnabled","concertHallMode","concertHallSeat","concertHallAmount","concertHallOccupancy","r5RealityEnabled","r5RealityAmount","r5RealityMode","virtualAmpEnabled","virtualAmpOpAmpEnabled","virtualAmpHeadroomDb","stemSeparationEnabled","adaptiveSafetyEnabled",
     "sceneEnabled","sceneStrength","sceneExponent","sceneInertia","sparkEnabled","sparkAmount","impactEnabled","impactAmount","seamNaturalizerEnabled","seamNaturalizerAmount","transientValleyEnabled","transientValleyAmount","transientEdgeEnabled","transientEdgeAmount","transientEdgeTone","orbitKeeperEnabled","deviceProfile","multiSpeakerEnabled","multiSpeakerAmount",
     "voiceMaterialEnabled","voiceMaterialAmount","voiceDepthMode","voiceTransparency","voiceAir",
     "headphoneCorrectionEnabled","headphoneModel","headphoneCorrectionStrength","headphoneCalibrationEnabled","headphoneCalibrationStrength","headphoneCalibrationGainsDb","headphoneOutputDeviceId","headphoneOutputLabel","headphoneCalibrationMode","hrtfEnabled","hrtfProfile","hrtfAmount",
@@ -30,7 +30,10 @@
   const SELF_DAP_KEYS = Object.freeze(["selfDapEnabled","selfDapStrength","selfDapRestoration","selfDapRestorationCutoffKhz"]);
   const PERSPECTIVE_KEYS = Object.freeze(["perspectiveEnabled","perspectiveDepth"]);
   const SPATIAL_KEYS = Object.freeze(["spatialEnabled","spatialMode","spatialDeviceProfile","spatialOutputTarget","spatialOutputDeviceId","spatialOutputLabel"]);
-  const VIRTUAL_AMP_KEYS = Object.freeze(["virtualAmpEnabled"]);
+  const CONCERT_HALL_KEYS = Object.freeze(["concertHallEnabled","concertHallMode","concertHallSeat","concertHallAmount","concertHallOccupancy"]);
+  const R5_REALITY_KEYS = Object.freeze(["r5RealityEnabled","r5RealityAmount","r5RealityMode"]);
+  const VIRTUAL_AMP_KEYS = Object.freeze(["virtualAmpEnabled","virtualAmpOpAmpEnabled","virtualAmpHeadroomDb"]);
+  const STEM_KEYS = Object.freeze(["stemSeparationEnabled"]);
   const SAFETY_KEYS = Object.freeze(["adaptiveSafetyEnabled","autoLevelEnabled","autoLevelProfile","autoLevelTargetDbfs"]);
   const SCENE_KEYS = Object.freeze(["sceneEnabled","sceneStrength","sceneExponent","sceneInertia","sparkEnabled","sparkAmount","impactEnabled","impactAmount","seamNaturalizerEnabled","seamNaturalizerAmount","transientValleyEnabled","transientValleyAmount","transientEdgeEnabled","transientEdgeAmount","transientEdgeTone","orbitKeeperEnabled","deviceProfile","multiSpeakerEnabled","multiSpeakerAmount",
     "voiceMaterialEnabled","voiceMaterialAmount","voiceDepthMode","voiceTransparency","voiceAir","headphoneCorrectionEnabled","headphoneModel","headphoneCorrectionStrength","headphoneCalibrationEnabled","headphoneCalibrationStrength","headphoneCalibrationGainsDb","headphoneOutputDeviceId","headphoneOutputLabel","headphoneCalibrationMode","hrtfEnabled","hrtfProfile","hrtfAmount","spatialTelemetryEnabled","reflectionCharacterEnabled","reflectionCharacterAmount","reflectionCharacterMode","avSyncEnabled","avSyncDelayMs"]);
@@ -72,7 +75,18 @@
     spatialOutputTarget: "local",
     spatialOutputDeviceId: "",
     spatialOutputLabel: "",
+    concertHallEnabled: false,
+    concertHallMode: "reference-shoebox",
+    concertHallSeat: "center",
+    concertHallAmount: 55,
+    concertHallOccupancy: 70,
+    r5RealityEnabled: false,
+    r5RealityAmount: 35,
+    r5RealityMode: "auto",
     virtualAmpEnabled: true,
+    virtualAmpOpAmpEnabled: true,
+    virtualAmpHeadroomDb: 12,
+    stemSeparationEnabled: true,
     adaptiveSafetyEnabled: true,
     sceneEnabled: false,
     sceneStrength: 55,
@@ -204,7 +218,18 @@
       spatialOutputTarget: ["local","sonobus-mobile-headphones","sonobus-mobile-speaker"].includes(raw.spatialOutputTarget) ? raw.spatialOutputTarget : DEFAULTS.spatialOutputTarget,
       spatialOutputDeviceId: typeof raw.spatialOutputDeviceId === "string" ? raw.spatialOutputDeviceId.slice(0,512) : "",
       spatialOutputLabel: typeof raw.spatialOutputLabel === "string" ? raw.spatialOutputLabel.slice(0,180) : "",
+      concertHallEnabled: Boolean(raw.concertHallEnabled),
+      concertHallMode: ["reference-shoebox","vineyard","chamber","opera"].includes(raw.concertHallMode) ? raw.concertHallMode : DEFAULTS.concertHallMode,
+      concertHallSeat: ["front","center","rear","balcony"].includes(raw.concertHallSeat) ? raw.concertHallSeat : DEFAULTS.concertHallSeat,
+      concertHallAmount: clampNumber(raw.concertHallAmount, 0, 100, DEFAULTS.concertHallAmount),
+      concertHallOccupancy: clampNumber(raw.concertHallOccupancy, 0, 100, DEFAULTS.concertHallOccupancy),
+      r5RealityEnabled: Boolean(raw.r5RealityEnabled),
+      r5RealityAmount: clampNumber(raw.r5RealityAmount, 0, 100, DEFAULTS.r5RealityAmount),
+      r5RealityMode: ["auto","voice","full"].includes(raw.r5RealityMode) ? raw.r5RealityMode : DEFAULTS.r5RealityMode,
       virtualAmpEnabled: raw.virtualAmpEnabled !== false,
+      virtualAmpOpAmpEnabled: raw.virtualAmpOpAmpEnabled !== false,
+      virtualAmpHeadroomDb: clampNumber(raw.virtualAmpHeadroomDb, 0, 18, DEFAULTS.virtualAmpHeadroomDb),
+      stemSeparationEnabled: raw.stemSeparationEnabled !== false,
       adaptiveSafetyEnabled: raw.adaptiveSafetyEnabled !== false,
       sceneEnabled: Boolean(raw.sceneEnabled),
       sceneStrength: clampNumber(raw.sceneStrength, 0, 100, DEFAULTS.sceneStrength),
@@ -397,6 +422,7 @@
     const perspective = perspectiveProfile(s.perspectiveEnabled, s.perspectiveDepth);
     const perspectiveBudget = perspective.wet * 8.0;
     const sceneBudget = (s.sceneEnabled ? (s.sceneStrength / 100) * 0.8 : 0) + (s.sparkEnabled ? (s.sparkAmount / 100) * 0.45 : 0) + (s.multiSpeakerEnabled ? (s.multiSpeakerAmount / 100) * 0.55 : 0);
+    const hallBudget = s.concertHallEnabled ? 0.55 + (s.concertHallAmount / 100) * 0.95 : 0;
     const modular = globalThis.YurikaModularCore;
     let modularBudget = 0;
     if (modular) {
@@ -406,7 +432,7 @@
       modularBudget += rp.wet * 7 + Math.max(0, rp.lowDb) * 0.4 + Math.max(0, rp.highDb) * 0.4;
       if (s.cartridgeEnabled) modularBudget += 0.7;
     }
-    return -Math.min(12, positiveEq * 0.45 + enhancementBudget + dapBudget + selfDapBudget + perspectiveBudget + modularBudget + sceneBudget);
+    return -Math.min(12, positiveEq * 0.45 + enhancementBudget + dapBudget + selfDapBudget + perspectiveBudget + modularBudget + sceneBudget + hallBudget);
   }
 
   // The final Web Audio DynamicsCompressorNode limiter measured +0.57 dB of
@@ -479,8 +505,8 @@
   }
 
   globalThis.YurikaAudioCore = Object.freeze({
-    DEFAULTS, PRESETS, DAP_MODES, SETTINGS_SCHEMA_VERSION, SETTINGS_KEYS, PRESET_AUDIO_KEYS,
-    VIRTUAL_DAP_KEYS, SELF_DAP_KEYS, PERSPECTIVE_KEYS, SPATIAL_KEYS, VIRTUAL_AMP_KEYS, SAFETY_KEYS, SCENE_KEYS, DAC_MATRIX_KEYS, ROOM_KEYS, INTEGRITY_KEYS, DJ_KEYS, CARTRIDGE_KEYS, SYSTEM_PRESET_NAMES, MANUAL_EDIT_KEYS, clamp, dbToGain, sanitizeSettings,
+    DEFAULTS, PRESETS, DAP_MODES, SETTINGS_SCHEMA_VERSION, SETTINGS_KEYS, PRESET_AUDIO_KEYS, R5_REALITY_KEYS,
+    VIRTUAL_DAP_KEYS, SELF_DAP_KEYS, PERSPECTIVE_KEYS, SPATIAL_KEYS, CONCERT_HALL_KEYS, VIRTUAL_AMP_KEYS, STEM_KEYS, SAFETY_KEYS, SCENE_KEYS, DAC_MATRIX_KEYS, ROOM_KEYS, INTEGRITY_KEYS, DJ_KEYS, CARTRIDGE_KEYS, SYSTEM_PRESET_NAMES, MANUAL_EDIT_KEYS, clamp, dbToGain, sanitizeSettings,
     sanitizeSettingsPatch, sanitizeManualPatch, migrateStoredSettings, applyPreset, applyManualPatch, diffSettings, computeAutoHeadroomDb,
     computeEffectiveOutputDb, dapProfile, perspectiveProfile, widthToMatrix, spectralFillGains, detailMixGain,
     realityMixGains, makeSoftSaturationCurve, classifyStereo, webAudioResonanceDb, isYoutubeUrl
