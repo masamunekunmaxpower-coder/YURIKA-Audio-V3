@@ -38,12 +38,20 @@ jobs:
       - name: Python dependencies
         run: python -m pip install --disable-pip-version-check numpy scipy soundfile pyloudnorm
 
+      - name: Extended benchmark wiring self-test
+        run: python tests/ci_extended_bench_wiring_test.py
+
       - name: Candidate hard-gate contracts
         shell: bash
         run: |
           python tests/candidate_static_test.py
           node tests/remote_mobile_contract_test.js
           node tests/virtual_amp_contract_test.js
+          node tests/stem_amp_runtime_smoke_test.js
+          node tests/concert_hall_contract_test.js
+          node tests/concert_hall_worklet_sim_test.js
+          node tests/r5_reality_contract_test.js
+          node tests/r5_reality_worklet_sim_test.js
           node tests/spatial_cue_preservation_test.js
           node tests/adaptive_safety_stability_test.js
           python tests/integrity_numeric_stability_test.py
@@ -76,6 +84,12 @@ jobs:
           python tests/audio_quality/specialized_analyzer_selftest.py
           python tests/audio_quality/adaptive_debug_analyzer_selftest.py
 
+      - name: Generate concert hall impulse stimulus
+        run: python tests/audio_quality/generate_hall_stimulus.py
+
+      - name: Generate R5 temporal-microstructure stimulus
+        run: python tests/audio_quality/generate_reality_stimulus.py
+
       - name: Generate adaptive-control debug stimulus
         run: python tests/audio_quality/generate_control_debug_stimulus.py
 
@@ -96,6 +110,15 @@ jobs:
       - name: Analyze 3D localization, SonoBus and Virtual Amp benches
         run: python tests/audio_quality/specialized_metrics.py
 
+      - name: Analyze Concert Hall bench
+        run: python tests/audio_quality/hall_metrics.py
+
+      - name: Analyze R5 Reality Resolution bench
+        run: python tests/audio_quality/reality_metrics.py
+
+      - name: Assert extended R5/Hall artifacts exist
+        run: python tests/audio_quality/assert_extended_artifacts.py
+
       - name: Render Self-DAP and SonoBus adaptive-control ablations
         run: node tests/audio_quality/run_adaptive_debug_playwright.mjs
 
@@ -112,6 +135,14 @@ jobs:
           if [ -f tests/audio_quality/results/specialized-report.md ]; then
             echo >> "$GITHUB_STEP_SUMMARY"
             cat tests/audio_quality/results/specialized-report.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -f tests/audio_quality/results/hall-report.md ]; then
+            echo >> "$GITHUB_STEP_SUMMARY"
+            cat tests/audio_quality/results/hall-report.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -f tests/audio_quality/results/reality-report.md ]; then
+            echo >> "$GITHUB_STEP_SUMMARY"
+            cat tests/audio_quality/results/reality-report.md >> "$GITHUB_STEP_SUMMARY"
           fi
           if [ -f tests/audio_quality/results/adaptive-debug-report.md ]; then
             echo >> "$GITHUB_STEP_SUMMARY"
