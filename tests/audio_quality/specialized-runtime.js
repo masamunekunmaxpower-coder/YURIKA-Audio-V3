@@ -6,7 +6,9 @@ function getYurikaSpecializedCapabilities() {
   return {
     spatial:Boolean(C?.DEFAULTS && Object.prototype.hasOwnProperty.call(C.DEFAULTS,"spatialEnabled") && globalThis.YurikaSpatialEngine),
     virtualAmp:Boolean(C?.DEFAULTS && Object.prototype.hasOwnProperty.call(C.DEFAULTS,"virtualAmpEnabled") && globalThis.YurikaVirtualAmp),
-    sonobus:Boolean(C?.DEFAULTS && Object.prototype.hasOwnProperty.call(C.DEFAULTS,"spatialOutputTarget") && globalThis.YurikaSpatialEngine)
+    sonobus:Boolean(C?.DEFAULTS && Object.prototype.hasOwnProperty.call(C.DEFAULTS,"spatialOutputTarget") && globalThis.YurikaSpatialEngine),
+    hall:Boolean(C?.DEFAULTS && Object.prototype.hasOwnProperty.call(C.DEFAULTS,"concertHallEnabled") && globalThis.YurikaConcertHall),
+    reality:Boolean(C?.DEFAULTS && Object.prototype.hasOwnProperty.call(C.DEFAULTS,"r5RealityEnabled") && globalThis.YurikaRealityResolution)
   };
 }
 
@@ -75,6 +77,11 @@ function transparentBaseSettings() {
     airDb:0,
     headphoneCorrectionEnabled:false,
     headphoneCalibrationEnabled:false,
+    concertHallEnabled:false,
+    r5RealityEnabled:false,
+    r5RealityAmount:0,
+    r5RealityMode:"auto",
+    stemSeparationEnabled:false,
     hiResMode:false
   };
 }
@@ -109,6 +116,20 @@ function specializedSettings(kind) {
       hrtfEnabled:false,
       hrtfAmount:0,
       virtualAmpEnabled:false
+    });
+  }
+  if (kind === "hall") {
+    return C.sanitizeSettings({
+      ...base, preset:"flat", spatialEnabled:false, hrtfEnabled:false,
+      virtualAmpEnabled:false, concertHallEnabled:true, concertHallMode:"reference-shoebox",
+      concertHallSeat:"center", concertHallAmount:72, deviceProfile:"stereo"
+    });
+  }
+  if (kind === "reality") {
+    return C.sanitizeSettings({
+      ...base, preset:"flat", spatialEnabled:false, hrtfEnabled:false, virtualAmpEnabled:false,
+      concertHallEnabled:false, stemSeparationEnabled:false, r5RealityEnabled:true, r5RealityAmount:58,
+      r5RealityMode:"voice", deviceProfile:"stereo"
     });
   }
   if (kind === "amp") {
@@ -153,7 +174,7 @@ async function stopSpecialized(session) {
   }
 }
 
-async function captureNodesForStimulus(state, inputUrl, nodesByName) {
+async function captureNodesForStimulus(state, inputUrl, nodesByName, tailSeconds=0.75) {
   const ctx = state.context;
   await ctx.audioWorklet.addModule(chrome.runtime.getURL("tests/audio_quality/capture-worklet.js"));
   const captures = {};
@@ -171,7 +192,7 @@ async function captureNodesForStimulus(state, inputUrl, nodesByName) {
   const buf = await ctx.decodeAudioData(ab.slice(0));
   const src = ctx.createBufferSource(); src.buffer = buf; src.connect(state.nodes.inputBus);
   const captureStart = ctx.currentTime + 0.25;
-  const tail = 0.75;
+  const tail = Math.max(0.1, Number(tailSeconds)||0.75);
   const frames = Math.ceil((buf.duration + tail) * ctx.sampleRate);
   const timeoutMs = Math.ceil((buf.duration + tail + 10) * 1000);
   const done = {};
@@ -280,7 +301,45 @@ async function runSonoBusDiagnosticTest(inputUrl) {
   }
 }
 
+async function runConcertHallBench(inputUrl) {
+  const settings = specializedSettings("hall");
+  let session;
+  try {
+    session = await startSpecialized(settings, 1994);
+    const state=session.state, nodes=state.nodes;
+    const captured=await captureNodesForStimulus(state,inputUrl,{
+      pre:nodes.spatial3d?.output,
+      post:nodes.concertHall?.output,
+      final:nodes.avSync?.sum
+    },4.5);
+    const status=globalThis.__YURIKA_TEST_API__.status();
+    const result={sampleRate:captured.sampleRate,status,pre:encodeCaptureResult(captured.results.pre),post:encodeCaptureResult(captured.results.post),final:encodeCaptureResult(captured.results.final)};
+    globalThis.__SPECIALIZED_HALL_RESULT__=result;
+    return {sampleRate:result.sampleRate,status,taps:["pre","post","final"]};
+  } finally { await stopSpecialized(session); }
+}
+
+async function runRealityResolutionBench(inputUrl) {
+  const settings=specializedSettings("reality");
+  let session;
+  try {
+    session=await startSpecialized(settings,1995);
+    const state=session.state,nodes=state.nodes;
+    const captured=await captureNodesForStimulus(state,inputUrl,{
+      pre:nodes.realityResolution?.input,
+      post:nodes.realityResolution?.output,
+      final:nodes.avSync?.sum
+    },0.9);
+    const status=globalThis.__YURIKA_TEST_API__.status();
+    const result={sampleRate:captured.sampleRate,status,pre:encodeCaptureResult(captured.results.pre),post:encodeCaptureResult(captured.results.post),final:encodeCaptureResult(captured.results.final)};
+    globalThis.__SPECIALIZED_REALITY_RESULT__=result;
+    return {sampleRate:result.sampleRate,status,taps:["pre","post","final"]};
+  } finally { await stopSpecialized(session); }
+}
+
 globalThis.getYurikaSpecializedCapabilities = getYurikaSpecializedCapabilities;
 globalThis.runSpatialLocalizationTest = runSpatialLocalizationTest;
 globalThis.runVirtualAmpBench = runVirtualAmpBench;
 globalThis.runSonoBusDiagnosticTest = runSonoBusDiagnosticTest;
+globalThis.runConcertHallBench = runConcertHallBench;
+globalThis.runRealityResolutionBench = runRealityResolutionBench;

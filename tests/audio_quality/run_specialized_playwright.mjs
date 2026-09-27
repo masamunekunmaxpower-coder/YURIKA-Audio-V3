@@ -50,7 +50,7 @@ try {
   page.on("console", msg => console.log(`[browser:${msg.type()}] ${msg.text()}`));
   page.on("pageerror", err => console.error("[browser:pageerror]", err));
   await page.goto(`chrome-extension://${extensionId}/tests/audio_quality/runtime.html`, { waitUntil:"load", timeout:30_000 });
-  await page.waitForFunction(() => typeof globalThis.runSpatialLocalizationTest === "function" && typeof globalThis.runVirtualAmpBench === "function" && typeof globalThis.runSonoBusDiagnosticTest === "function", null, { timeout:30_000 });
+  await page.waitForFunction(() => typeof globalThis.runSpatialLocalizationTest === "function" && typeof globalThis.runVirtualAmpBench === "function" && typeof globalThis.runSonoBusDiagnosticTest === "function" && typeof globalThis.runConcertHallBench === "function" && typeof globalThis.runRealityResolutionBench === "function", null, { timeout:30_000 });
 
   const capabilities = await page.evaluate(() => globalThis.getYurikaSpecializedCapabilities?.() ?? {spatial:false,virtualAmp:false});
   fs.writeFileSync(path.join(outDir, "specialized-capabilities.json"), JSON.stringify(capabilities, null, 2));
@@ -85,6 +85,36 @@ try {
   fs.writeFileSync(path.join(outDir, "sonobus.status.json"), JSON.stringify(sonobusSmall.status ?? {}, null, 2));
   fs.writeFileSync(path.join(outDir, "sonobus.runtime.json"), JSON.stringify(sonobusSmall, null, 2));
   } else { console.log("[YURIKA] SonoBus specialized bench skipped: feature unavailable."); }
+
+  if (capabilities.hall) {
+  console.log("[YURIKA] Rendering Concert Hall impulse/decay benchmark...");
+  const hallSmall = await page.evaluate(async () => {
+    globalThis.__SPECIALIZED_HALL_RESULT__ = null;
+    return await globalThis.runConcertHallBench(chrome.runtime.getURL("tests/audio_quality/concert-hall-stimulus.wav"));
+  });
+  await page.waitForFunction(() => globalThis.__SPECIALIZED_HALL_RESULT__?.post?.left, null, { timeout:180_000 });
+  const hall = await page.evaluate(() => globalThis.__SPECIALIZED_HALL_RESULT__);
+  dumpTap("hall", "pre", hall.pre, hall.sampleRate);
+  dumpTap("hall", "post", hall.post, hall.sampleRate);
+  dumpTap("hall", "final", hall.final, hall.sampleRate);
+  fs.writeFileSync(path.join(outDir, "hall.status.json"), JSON.stringify(hallSmall.status ?? {}, null, 2));
+  fs.writeFileSync(path.join(outDir, "hall.runtime.json"), JSON.stringify(hallSmall, null, 2));
+  } else { console.log("[YURIKA] Concert Hall specialized bench skipped: feature unavailable."); }
+
+  if (capabilities.reality) {
+  console.log("[YURIKA] Rendering R5 Reality Resolution benchmark...");
+  const realitySmall = await page.evaluate(async () => {
+    globalThis.__SPECIALIZED_REALITY_RESULT__ = null;
+    return await globalThis.runRealityResolutionBench(chrome.runtime.getURL("tests/audio_quality/reality-degraded.wav"));
+  });
+  await page.waitForFunction(() => globalThis.__SPECIALIZED_REALITY_RESULT__?.post?.left, null, { timeout:180_000 });
+  const reality = await page.evaluate(() => globalThis.__SPECIALIZED_REALITY_RESULT__);
+  dumpTap("reality", "pre", reality.pre, reality.sampleRate);
+  dumpTap("reality", "post", reality.post, reality.sampleRate);
+  dumpTap("reality", "final", reality.final, reality.sampleRate);
+  fs.writeFileSync(path.join(outDir, "reality.status.json"), JSON.stringify(realitySmall.status ?? {}, null, 2));
+  fs.writeFileSync(path.join(outDir, "reality.runtime.json"), JSON.stringify(realitySmall, null, 2));
+  } else { console.log("[YURIKA] R5 Reality specialized bench skipped: feature unavailable."); }
 
   if (capabilities.virtualAmp) {
   console.log("[YURIKA] Rendering Virtual Class-A amplifier benchmark...");
