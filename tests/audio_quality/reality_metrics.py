@@ -15,6 +15,20 @@ def read_stereo(path):
     if x.shape[1]==1:x=np.repeat(x,2,axis=1)
     return x[:,:2],sr
 
+def resample_reference(x, src_sr, dst_sr):
+    """Resample the evaluator-only pristine reference to the Chromium capture rate.
+
+    The browser AudioContext may run at 44.1 kHz even though the deterministic
+    source/reference WAVs are authored at 48 kHz. The R5 runtime never receives
+    the pristine reference; this conversion exists only so full-reference metrics
+    compare signals on the same sampling grid.
+    """
+    src_sr=int(src_sr); dst_sr=int(dst_sr)
+    if src_sr == dst_sr:
+        return np.asarray(x,float)
+    g=math.gcd(src_sr,dst_sr)
+    return signal.resample_poly(np.asarray(x,float), dst_sr//g, src_sr//g, axis=0)
+
 def rms(x): return float(np.sqrt(np.mean(np.square(np.asarray(x,float)))+1e-30))
 def db20(v): return float(20*np.log10(max(float(v),1e-15)))
 def mono(x): return np.mean(np.asarray(x,float),axis=1) if np.asarray(x).ndim==2 else np.asarray(x,float)
@@ -212,9 +226,12 @@ def improvement(pre,post,key,higher=True):
     return float(b-a) if higher else float(a-b)
 
 def main():
-    pristine,sr=read_stereo(HERE/'reality-pristine.wav')
-    pre,sr2=read_stereo(RESULTS/'reality.pre.wav'); post,sr3=read_stereo(RESULTS/'reality.post.wav'); final,sr4=read_stereo(RESULTS/'reality.final.wav')
-    if len({sr,sr2,sr3,sr4})!=1:raise RuntimeError('sample-rate mismatch')
+    pristine,reference_sr=read_stereo(HERE/'reality-pristine.wav')
+    pre,capture_sr=read_stereo(RESULTS/'reality.pre.wav'); post,sr3=read_stereo(RESULTS/'reality.post.wav'); final,sr4=read_stereo(RESULTS/'reality.final.wav')
+    if len({capture_sr,sr3,sr4})!=1:raise RuntimeError('captured sample-rate mismatch')
+    reference_resampled = int(reference_sr) != int(capture_sr)
+    pristine=resample_reference(pristine,reference_sr,capture_sr)
+    sr=capture_sr
     P=metric_bundle(pristine,pre,sr);O=metric_bundle(pristine,post,sr)
     rr,ff,flag=align_to(pristine,final,sr);F={'lag_ms':flag*1000/sr,'waveform_corr':corr(rr,ff),'si_sdr_db':si_sdr(rr,ff),'peak_dbfs':db20(np.max(np.abs(ff)))}
     keys_hi=['waveform_corr','si_sdr_db','tfs_corr','envelope_corr','modulation_corr']
@@ -237,13 +254,14 @@ def main():
     report={
       'gate':'PASS' if not critical else 'FAIL','critical':critical,'warnings':warnings,
       'reference_kind':'full-reference pristine vs degraded vs R5 output',
+      'reference_sample_rate':int(reference_sr),'capture_sample_rate':int(capture_sr),'reference_resampled_to_capture_rate':reference_resampled,
       'pre':P,'post_r5':O,'final_chain':F,'improvements_post_minus_pre_or_error_reduction':imp,
       'improved_metric_count':improved,'regressed_metric_count':regressed,'metric_count':len(imp),
       'runtime_status':r5,
       'interpretation_note':'Positive improvement values mean closer to the synthetic pristine reference for that metric. This benchmark does not prove recovery of unknowable source information or subjective realism.'
     }
     (RESULTS/'reality-report.json').write_text(json.dumps(report,indent=2,allow_nan=False),encoding='utf-8')
-    lines=['# R5 Reality Resolution Evaluation','',f"**Gate:** {report['gate']}",f"**Directional improvements:** {improved}/{len(imp)} metrics; regressions {regressed}/{len(imp)}",'',
+    lines=['# R5 Reality Resolution Evaluation','',f"**Gate:** {report['gate']}",f"**Directional improvements:** {improved}/{len(imp)} metrics; regressions {regressed}/{len(imp)}",f"**Reference / capture sample rate:** {int(reference_sr)} Hz → {int(capture_sr)} Hz" + (' (reference resampled for evaluation)' if reference_resampled else ''),'',
            '| Metric | Degraded input | R5 output | Directional change |','|---|---:|---:|---:|']
     ordered=[('SI-SDR dB','si_sdr_db',True),('Waveform corr','waveform_corr',True),('TFS corr','tfs_corr',True),('Envelope corr','envelope_corr',True),('Modulation corr','modulation_corr',True),('Phase MAE deg','instantaneous_phase_mae_deg',False),('Group delay RMSE us','group_delay_rmse_us',False),('CPP abs delta dB','cpp_abs_delta_db',False),('Jitter abs delta %','jitter_abs_delta_pct',False),('Shimmer abs delta %','shimmer_abs_delta_pct',False),('HNR abs delta dB','hnr_abs_delta_db',False),('Sample entropy abs delta','sample_entropy_abs_delta',False),('Bicoherence abs delta','bicoherence_abs_delta',False),('3rd moment abs delta','moment3_abs_delta',False),('4th moment abs delta','moment4_abs_delta',False),('5th moment abs delta','moment5_abs_delta',False),('Transient crest abs delta','transient_crest_abs_delta',False),('R5 feature distance','r5_feature_distance',False),('R5 P5 abs delta','r5_p5_abs_delta',False)]
     for label,k,hi in ordered:
