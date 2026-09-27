@@ -18,6 +18,9 @@ const HeadphoneProfiles = globalThis.YurikaHeadphoneProfiles;
 const SpatialProfiles = globalThis.YurikaSpatialDeviceProfiles;
 const SpatialEngine = globalThis.YurikaSpatialEngine;
 const SpatialDiagnostics = globalThis.YurikaSpatialDiagnostics;
+const ConcertHall = globalThis.YurikaConcertHall;
+const StemSeparator = globalThis.YurikaStemSeparator;
+const RealityResolution = globalThis.YurikaRealityResolution;
 const VirtualAmp = globalThis.YurikaVirtualAmp;
 
 let state = freshState();
@@ -29,6 +32,7 @@ function freshState(previousSettings = DEFAULTS, previousRevision = 0) {
     noiseWorkletAvailable: false, safetyMeterAvailable: false, sparkWorkletAvailable: false, spatialMetricsAvailable:false, requestedHiRes: false, inputChannels: null,
     cpuProfile: AdaptiveV28 ? AdaptiveV28.cpuProfile(navigator.hardwareConcurrency || 1) : {name:"balanced",logicalProcessors:navigator.hardwareConcurrency||1,maxSessions:2,spatialReportMs:80}, spatialMetrics:null, spatialLastReportAtMs:0,
     headphoneOutputSinkApplied:false, headphoneOutputSinkError:null, headphoneDetectedLabel:previousSettings.headphoneOutputLabel||"", headphoneCalibrationLastAppliedAtMs:0,
+    headphoneEffectiveMode:false, hrtfEffectiveActive:false, hrtfEffectiveProfile:null,
     spatialResolved:null, spatialParams:null, spatialFallbackStatus:"none", spatialLastAdaptiveApplyMs:0,
     spatialDeviceListener:null, spatialSinkListener:null, spatialSinkApplied:false, spatialSinkError:null, spatialRuntimeOutputLabel:previousSettings.spatialOutputLabel||"",
     contextLatencyPolicy:"uninitialized",
@@ -134,12 +138,13 @@ function applySpatialLayer(initial = false, previous = {}) {
     const resolved=SpatialProfiles.resolve({
       requestedProfile:state.settings.spatialDeviceProfile,
       outputTarget:state.settings.spatialOutputTarget,
-      label:state.settings.spatialOutputLabel || state.spatialRuntimeOutputLabel,
+      label:state.spatialRuntimeOutputLabel || state.settings.spatialOutputLabel,
       legacyDeviceProfile:state.settings.deviceProfile,
-      headphoneIntent:Boolean(state.settings.deviceProfile === "headphone" || state.settings.headphoneOutputDeviceId || state.settings.headphoneOutputLabel || state.settings.headphoneCorrectionEnabled)
+      headphoneIntent:isLocalHeadphoneIntent(state.settings)
     });
     const remoteBinaural=state.settings.spatialOutputTarget==="sonobus-mobile-headphones" && state.settings.spatialEnabled;
-    const spatialSettings=remoteBinaural ? {...state.settings,hrtfEnabled:true,hrtfProfile:state.settings.hrtfEnabled?state.settings.hrtfProfile:"front",deviceProfile:"headphone"} : state.settings;
+    const effectiveHrtfProfile=state.hrtfEffectiveProfile || (state.settings.hrtfEnabled ? state.settings.hrtfProfile : (remoteBinaural ? "natural" : state.settings.hrtfProfile));
+    const spatialSettings={...state.settings,hrtfEnabled:remoteBinaural?true:state.settings.hrtfEnabled,hrtfProfile:effectiveHrtfProfile,hrtfEffectiveEnabled:Boolean(state.hrtfEffectiveActive),headphoneEffectiveMode:Boolean(state.headphoneEffectiveMode),...(remoteBinaural?{deviceProfile:"headphone"}:{})};
     const result=SpatialEngine.apply(stage,spatialSettings,{resolved,scene:spatialSceneHint(),initial});
     state.spatialResolved=resolved;
     state.spatialParams=result?.params || stage.lastParams || null;
@@ -147,7 +152,7 @@ function applySpatialLayer(initial = false, previous = {}) {
     else if (state.spatialFallbackStatus === "spatial-module-unavailable") state.spatialFallbackStatus="none";
     const nowEnabled=Boolean(state.settings.spatialEnabled);
     if (!initial && nowEnabled !== beforeEnabled) emitSpatialEvent(nowEnabled ? "spatial:on" : "spatial:off", { mode:state.settings.spatialMode, profile:resolved.profileId });
-    if (!initial && beforeProfile && beforeProfile !== resolved.profileId) emitSpatialEvent("spatial:device-change", { from:beforeProfile, to:resolved.profileId, label:state.settings.spatialOutputLabel || state.spatialRuntimeOutputLabel || "" });
+    if (!initial && beforeProfile && beforeProfile !== resolved.profileId) emitSpatialEvent("spatial:device-change", { from:beforeProfile, to:resolved.profileId, label:state.spatialRuntimeOutputLabel || state.settings.spatialOutputLabel || "" });
   } catch (error) {
     state.spatialFallbackStatus=`spatial-engine-error:${error?.message || error}`;
     try { SpatialEngine.apply(stage,{...state.settings,spatialEnabled:false},{resolved:state.spatialResolved,scene:{},initial:false}); } catch {}
@@ -172,6 +177,7 @@ async function applyOutputSink(next, previous = {}, force = false) {
   if (typeof ctx.setSinkId !== "function") {
     state.spatialSinkApplied=false;
     state.spatialSinkError=targetId ? "AudioContext.setSinkId unsupported" : null;
+    state.headphoneOutputSinkApplied=false; state.headphoneOutputSinkError=state.spatialSinkError;
     if (targetId) { state.spatialFallbackStatus="setSinkId-unsupported"; emitSpatialEvent("spatial:fallback",{reason:state.spatialFallbackStatus}); }
     return;
   }
@@ -201,7 +207,9 @@ async function handleSpatialDeviceChange(reason = "devicechange") {
       state.settings=sanitizeSettings({...state.settings,...patch});
       state.spatialRuntimeOutputLabel="";
       state.spatialFallbackStatus="saved-output-missing-default-used";
+      applyHrtfAndHeadphone(state.settings,false,previous);
       applySpatialLayer(false,previous);
+      if (state.nodes?.concertHall && ConcertHall?.apply) ConcertHall.apply(state.nodes.concertHall,state.settings,state.spatialResolved,{initial:false});
       await applyOutputSink(state.settings,previous,true);
       try { await chrome.runtime.sendMessage({target:"service-worker",type:"SPATIAL_RUNTIME_PATCH",patch}); } catch {}
       emitSpatialEvent("spatial:fallback",{reason:state.spatialFallbackStatus,source:reason});
@@ -210,17 +218,18 @@ async function handleSpatialDeviceChange(reason = "devicechange") {
     if (selected) {
       if (String(state.spatialFallbackStatus || "").startsWith("saved-output-")) state.spatialFallbackStatus="none";
       const label=selected.label || state.settings.spatialOutputLabel || "";
+      const runtimeLabelChanged=label !== state.spatialRuntimeOutputLabel;
       state.spatialRuntimeOutputLabel=label;
       if (saved && label && label !== state.settings.spatialOutputLabel) {
         const previous=state.settings;
         const patch={spatialOutputLabel:label};
         state.settings=sanitizeSettings({...state.settings,...patch});
-        if (state.settings.spatialOutputTarget === "local") applySpatialLayer(false,previous);
+        if (state.settings.spatialOutputTarget === "local") { applyHrtfAndHeadphone(state.settings,false,previous); applySpatialLayer(false,previous); if (state.nodes?.concertHall && ConcertHall?.apply) ConcertHall.apply(state.nodes.concertHall,state.settings,state.spatialResolved,{initial:false}); }
         try { await chrome.runtime.sendMessage({target:"service-worker",type:"SPATIAL_RUNTIME_PATCH",patch}); } catch {}
-      } else if (state.settings.spatialDeviceProfile === "auto" && state.settings.spatialOutputTarget === "local") {
-        // Remote SonoBus profiles are fixed by outputTarget and do not depend on an OS label.
-        // Avoid re-ramping Spatial parameters on unrelated sink/device notifications.
+      } else if (state.settings.spatialDeviceProfile === "auto" && state.settings.spatialOutputTarget === "local" && (runtimeLabelChanged || !state.spatialResolved)) {
+        applyHrtfAndHeadphone(state.settings,false,state.settings);
         applySpatialLayer(false,state.settings);
+        if (state.nodes?.concertHall && ConcertHall?.apply) ConcertHall.apply(state.nodes.concertHall,state.settings,state.spatialResolved,{initial:false});
       }
       emitSpatialEvent("spatial:device-change",{source:reason,label:label||"unavailable",profile:state.spatialResolved?.profileId||null});
     }
@@ -328,9 +337,9 @@ function createVoiceMaterialStage(ctx, input) {
 function isLocalHeadphoneIntent(settings = {}) {
   if (String(settings.spatialOutputTarget || "local").startsWith("sonobus-")) return false;
   const spatialHeadphone=["generic-headphone","generic-iem","generic-earbuds","sennheiser-hd600","sony-wh1000xm5","airpods-family"].includes(String(settings.spatialDeviceProfile||""));
-  const label=String(settings.headphoneOutputLabel||settings.spatialOutputLabel||"");
+  const label=String(state.spatialRuntimeOutputLabel||settings.spatialOutputLabel||settings.headphoneOutputLabel||"");
   const labelHeadphone=/headphone|headset|headphones|ヘッドホン|ヘッドセット|airpods|earbuds|iem|audio[- ]?technica|\bath[- _]?[a-z0-9]+|wh[- ]?1000|wf[- ]?/i.test(label);
-  return settings.deviceProfile === "headphone" || spatialHeadphone || labelHeadphone || Boolean(settings.headphoneOutputDeviceId);
+  return settings.deviceProfile === "headphone" || spatialHeadphone || labelHeadphone || Boolean(settings.headphoneOutputDeviceId) || Boolean(settings.headphoneCorrectionEnabled);
 }
 function createHrtfStage(ctx, input, channels = 2) {
   if (channels < 2) { const bypass=ctx.createGain(); input.connect(bypass); return {output:bypass,stage:{bypass,mono:true}}; }
@@ -378,11 +387,11 @@ async function createContext(settings) {
     try { ctx = new AudioContext({ latencyHint:"interactive" }); } catch {}
   }
   if (!ctx && settings.hiResMode) {
-    state.contextLatencyPolicy="playback-hires";
-    try { ctx = new AudioContext({ latencyHint: "playback", sampleRate: 96000 }); }
-    catch { /* browser/device does not support requested sample rate */ }
+    state.contextLatencyPolicy="interactive-hires";
+    try { ctx = new AudioContext({ latencyHint:"interactive", sampleRate:96000 }); }
+    catch { try { ctx = new AudioContext({ latencyHint:"interactive" }); } catch {} }
   }
-  if(!ctx){ state.contextLatencyPolicy="playback-default"; ctx=new AudioContext({ latencyHint: "playback" }); }
+  if(!ctx){ state.contextLatencyPolicy="interactive-default"; try { ctx=new AudioContext({ latencyHint:"interactive" }); } catch { state.contextLatencyPolicy="playback-fallback"; ctx=new AudioContext({ latencyHint:"playback" }); } }
   state.headphoneOutputSinkApplied=false; state.headphoneOutputSinkError=null;
   const sink=String(settings.headphoneOutputDeviceId||"");
   if(sink && typeof ctx.setSinkId==="function"){
@@ -561,7 +570,9 @@ function applyHrtfAndHeadphone(next, initial=false, previous=null){
   // field. This avoids stacking a strong front cue field on top of the dedicated Spatial layer.
   const hrtfName=remoteBinaural && !next.hrtfEnabled ? "natural" : next.hrtfProfile;
   const hrtfAmount=remoteBinaural ? Math.max(30,Number(next.hrtfAmount)||0) : Number(next.hrtfAmount)||0;
-  const hp=AdaptiveV27.hrtfProfile(hrtfName,hrtfMode && (next.hrtfEnabled||remoteBinaural) ? hrtfAmount : 0);
+  const hrtfEffectiveActive=Boolean(hrtfMode && (next.hrtfEnabled||remoteBinaural));
+  const hp=AdaptiveV27.hrtfProfile(hrtfName,hrtfEffectiveActive ? hrtfAmount : 0);
+  state.headphoneEffectiveMode=Boolean(localHeadphoneMode); state.hrtfEffectiveActive=hrtfEffectiveActive; state.hrtfEffectiveProfile=hrtfEffectiveActive?hrtfName:null;
   if(!h.mono){ const d=1/(1+hp.crossfeed); smooth(h.directL.gain,d,ctx.currentTime,initial?0.05:0.10); smooth(h.directR.gain,d,ctx.currentTime,initial?0.05:0.10); smooth(h.crossL.gain,hp.crossfeed*d,ctx.currentTime,0.10); smooth(h.crossR.gain,hp.crossfeed*d,ctx.currentTime,0.10); smooth(h.delayL.delayTime,hp.delaySeconds,ctx.currentTime,0.10); smooth(h.delayR.delayTime,hp.delaySeconds,ctx.currentTime,0.10); smooth(h.lpL.frequency,Math.min(hp.lowpassHz,ctx.sampleRate*0.44),ctx.currentTime,0.10); smooth(h.lpR.frequency,Math.min(hp.lowpassHz,ctx.sampleRate*0.44),ctx.currentTime,0.10); smooth(h.pinna.gain,hp.pinnaDb,ctx.currentTime,0.10); smooth(h.air.gain,hp.airDb,ctx.currentTime,0.10); }
   const profile=HeadphoneProfiles.getProfile(next.headphoneModel); const strength=next.headphoneCorrectionEnabled&&localHeadphoneMode?Math.max(0,Math.min(1,next.headphoneCorrectionStrength/100)):0;
   smooth(c.pre.gain,dbToGain(profile.preampDb*strength),ctx.currentTime,initial?0.08:0.18);
@@ -1401,6 +1412,9 @@ function applySettings(raw, { initial = false, revision = 0, replace = false } =
   applyHrtfAndHeadphone(next, initial, previous);
   void applyOutputSink(next, previous, initial);
   applySpatialLayer(initial, previous);
+  if (nodes.stemSeparator && StemSeparator?.apply) StemSeparator.apply(nodes.stemSeparator, next);
+  if (nodes.realityResolution && RealityResolution?.apply) RealityResolution.apply(nodes.realityResolution, next);
+  if (nodes.concertHall && ConcertHall?.apply) ConcertHall.apply(nodes.concertHall, next, state.spatialResolved, {initial});
   if (nodes.virtualAmp && VirtualAmp?.apply) VirtualAmp.apply(nodes.virtualAmp, next);
   if (!next.reflectionCharacterEnabled) resetReflectionCharacter(0.08); else applyReflectionCharacter({pulse:state.sparkPulse,speechRatio:state.seamSpeechRatio});
   applyAvSync();
@@ -1458,6 +1472,7 @@ async function stop() {
   stopDjAutoMix();
   removeSpatialDeviceMonitoring();
   if (state.nodes?.spatial3d && SpatialEngine) { try { SpatialEngine.dispose(state.nodes.spatial3d); } catch {} }
+  if (state.nodes?.concertHall && ConcertHall) { try { ConcertHall.dispose(state.nodes.concertHall); } catch {} }
   const preserved = { ...state.settings, enabled: false };
   if (state.context && state.context.state !== "closed" && state.nodes?.masterSafety) {
     try { smooth(state.nodes.masterSafety.gain, 0, state.context.currentTime, 0.035); await new Promise((resolve) => setTimeout(resolve, 45)); } catch {}
@@ -1546,7 +1561,13 @@ async function start({ tabId, streamId, settings, revision = 0, deck = "A", medi
     fillTop.connect(convolver); convolver.connect(realityReflectionGain); realityReflectionGain.connect(mixBus);
 
     const processingChannels = inputMode === "dj" ? 2 : channelCount;
-    const voiceMaterial = createVoiceMaterialStage(ctx, mixBus);
+    const stemSeparator = StemSeparator?.createStage
+      ? await StemSeparator.createStage(ctx, mixBus, processingChannels, state.settings)
+      : (() => { const bypass=ctx.createGain(); mixBus.connect(bypass); return {output:bypass,stage:{available:false,backend:"bypass",error:"stem-separator-module-unavailable",enabled:Boolean(state.settings.stemSeparationEnabled)}}; })();
+    const realityResolution = RealityResolution?.createStage
+      ? await RealityResolution.createStage(ctx, stemSeparator.output, processingChannels, state.settings)
+      : (() => { const bypass=ctx.createGain(); stemSeparator.output.connect(bypass); return {output:bypass,stage:{available:false,backend:"bypass",error:"r5-reality-module-unavailable",enabled:Boolean(state.settings.r5RealityEnabled)}}; })();
+    const voiceMaterial = createVoiceMaterialStage(ctx, realityResolution.output);
     const selfDap = createSelfDapStage(ctx, voiceMaterial.output, processingChannels);
     const width = createWidthMatrix(ctx, selfDap.output, processingChannels);
     const perspective = createPerspectiveStage(ctx, width.output);
@@ -1589,6 +1610,7 @@ async function start({ tabId, streamId, settings, revision = 0, deck = "A", medi
     // v2.6 Transient Valley is a unity GainNode at rest. It adds no look-ahead or fixed delay.
     const transientValley = ctx.createGain(); transientValley.gain.value = 1;
     const spatial3d = SpatialEngine?.createStage ? SpatialEngine.createStage(ctx, transientValley, processingChannels) : { output:transientValley, stage:null };
+    const concertHall = ConcertHall?.createStage ? await ConcertHall.createStage(ctx, spatial3d.output) : { output:spatial3d.output, stage:null };
     const autoLevel = ctx.createGain(); autoLevel.gain.value = 1;
     const adaptiveTrim = ctx.createGain(); adaptiveTrim.gain.value = 1;
     const virtualAmp = VirtualAmp?.createStage
@@ -1604,15 +1626,15 @@ async function start({ tabId, streamId, settings, revision = 0, deck = "A", medi
     headphoneCorrection.output.connect(edgeAccentBand); edgeAccentBand.connect(edgeAccentShaper); edgeAccentShaper.connect(edgeAccentGain); edgeAccentGain.connect(output);
     reflectionCharacter.output.connect(output);
     output.connect(transientValley);
-    transientValley.connect(sharedAnalyser); transientValley.connect(sparkMonitor.node); spatial3d.output.connect(autoLevel); autoLevel.connect(adaptiveTrim); virtualAmp.output.connect(limiter); limiter.connect(safetyMeter.node); safetyMeter.node.connect(masterSafety); const avSync=createAvSyncStage(ctx,masterSafety); avSync.output.connect(ctx.destination);
+    transientValley.connect(sharedAnalyser); transientValley.connect(sparkMonitor.node); concertHall.output.connect(autoLevel); autoLevel.connect(adaptiveTrim); virtualAmp.output.connect(limiter); limiter.connect(safetyMeter.node); safetyMeter.node.connect(masterSafety); const avSync=createAvSyncStage(ctx,masterSafety); avSync.output.connect(ctx.destination);
 
     state.tabId = tabId; state.stream = stream; state.context = ctx; state.source = source; state.inputMode = inputMode; state.externalActive = inputMode === "external";
     state.nodes = {
       inputBus, cartridge: cartridge.stage, noiseNode: noise.node, lowCut, lowCutBypass, lowCutProcessed, lowCutSum, bass, warmth, clarity, air, fillBody, fillPresence, fillTop,
       detailHighpass, detailShaper, detailGain, realityShaper, realityHarmGain, convolver,
-      realityReflectionGain, mixBus, voiceMaterial: voiceMaterial.stage, selfDap: selfDap.stage, widthMatrix: width.matrix, perspective: perspective.stage,
+      realityReflectionGain, mixBus, stemSeparator:stemSeparator.stage, realityResolution:realityResolution.stage, voiceMaterial: voiceMaterial.stage, selfDap: selfDap.stage, widthMatrix: width.matrix, perspective: perspective.stage,
       dacMatrix: dacMatrix.stage, dapPre, dapLow, dapHigh, dapDirect, dapShaper, dapHarmGain, dapSum, dapCrossfeed: dapCross.matrix,
-      room: room.stage, integrity: integrity.stage, hrtf: hrtf.stage, headphoneCorrection: headphoneCorrection.stage, reflectionCharacter:reflectionCharacter.stage, compressor, compressorBypass, compressorProcessed, compressorSum, impactHighpass, impactLowpass, impactGain, edgeAccentBand, edgeAccentShaper, edgeAccentGain, output, transientValley, spatial3d:spatial3d.stage, sharedAnalyser, sparkMonitor: sparkMonitor.node, spatialMetrics:spatialMetrics.node, sceneSink, autoLevel, adaptiveTrim, virtualAmp:virtualAmp.stage, limiter, safetyMeter: safetyMeter.node, masterSafety, avSync:avSync.stage
+      room: room.stage, integrity: integrity.stage, hrtf: hrtf.stage, headphoneCorrection: headphoneCorrection.stage, reflectionCharacter:reflectionCharacter.stage, compressor, compressorBypass, compressorProcessed, compressorSum, impactHighpass, impactLowpass, impactGain, edgeAccentBand, edgeAccentShaper, edgeAccentGain, output, transientValley, spatial3d:spatial3d.stage, concertHall:concertHall.stage, sharedAnalyser, sparkMonitor: sparkMonitor.node, spatialMetrics:spatialMetrics.node, sceneSink, autoLevel, adaptiveTrim, virtualAmp:virtualAmp.stage, limiter, safetyMeter: safetyMeter.node, masterSafety, avSync:avSync.stage
     };
     state.noiseWorkletAvailable = noise.available;
     state.safetyMeterAvailable = safetyMeter.available;
@@ -1833,6 +1855,9 @@ function status() {
     sparkWorkletAvailable: state.sparkWorkletAvailable,
     spatialMetricsAvailable:state.spatialMetricsAvailable, spatialMetrics:state.spatialMetrics, spatialLastReportAtMs:state.spatialLastReportAtMs,
     spatial3d: SpatialDiagnostics?.snapshot ? SpatialDiagnostics.snapshot({settings:state.settings,resolved:state.spatialResolved,params:state.spatialParams,runtime:{fallbackStatus:state.spatialFallbackStatus,wetConnected:state.nodes?.spatial3d?.wetConnected,sinkApplied:state.spatialSinkApplied,sinkError:state.spatialSinkError,outputLabel:state.spatialRuntimeOutputLabel},context:state.context,inputChannels:state.inputChannels}) : null,
+    concertHall: ConcertHall?.snapshot ? ConcertHall.snapshot(state.nodes?.concertHall) : null,
+    realityResolution: RealityResolution?.snapshot ? RealityResolution.snapshot(state.nodes?.realityResolution) : null,
+    stemSeparation: StemSeparator?.snapshot ? StemSeparator.snapshot(state.nodes?.stemSeparator) : null,
     virtualAmp: VirtualAmp?.snapshot ? VirtualAmp.snapshot(state.nodes?.virtualAmp) : null,
     sparkPulse: Number(state.sparkPulse.toFixed(3)),
     sparkReports: state.sparkReports,
@@ -1882,11 +1907,11 @@ function status() {
     voiceConfidence: Number(state.voiceConfidence.toFixed(3)), voiceConfidenceRaw:Number(state.voiceConfidenceRaw.toFixed(3)), voiceSyntheticTendency: Number(state.voiceSyntheticTendency.toFixed(3)), voiceSyntheticTendencyRaw:Number(state.voiceSyntheticTendencyRaw.toFixed(3)), voiceEvents: state.voiceEvents,
     headphoneCorrectionEnabled: Boolean(state.settings.headphoneCorrectionEnabled), headphoneModel: state.settings.headphoneModel, headphoneCorrectionStrength: state.settings.headphoneCorrectionStrength,
     headphoneCalibrationEnabled:Boolean(state.settings.headphoneCalibrationEnabled), headphoneCalibrationStrength:state.settings.headphoneCalibrationStrength, headphoneCalibrationGainsDb:[...(state.settings.headphoneCalibrationGainsDb||[])], headphoneCalibrationMode:state.settings.headphoneCalibrationMode,
-    headphoneOutputLabel:state.settings.headphoneOutputLabel||"", headphoneOutputDeviceSelected:Boolean(state.settings.headphoneOutputDeviceId), headphoneOutputSinkApplied:Boolean(state.headphoneOutputSinkApplied), headphoneOutputSinkError:state.headphoneOutputSinkError,
-    headphoneEffectiveMode:isLocalHeadphoneIntent(state.settings),
+    headphoneOutputLabel:state.spatialRuntimeOutputLabel||state.settings.spatialOutputLabel||state.settings.headphoneOutputLabel||"", headphoneOutputDeviceSelected:Boolean(state.settings.headphoneOutputDeviceId||state.settings.spatialOutputDeviceId), headphoneOutputSinkApplied:Boolean(state.headphoneOutputSinkApplied), headphoneOutputSinkError:state.headphoneOutputSinkError,
+    headphoneEffectiveMode:Boolean(state.headphoneEffectiveMode),
     hrtfEnabled: Boolean(state.settings.hrtfEnabled), hrtfProfile: state.settings.hrtfProfile, hrtfAmount: state.settings.hrtfAmount,
-    hrtfEffectiveEnabled:Boolean((state.settings.hrtfEnabled && isLocalHeadphoneIntent(state.settings)) || (state.settings.spatialEnabled && state.settings.spatialOutputTarget==="sonobus-mobile-headphones")),
-    hrtfEffectiveProfile:(state.settings.spatialEnabled && state.settings.spatialOutputTarget==="sonobus-mobile-headphones" && !state.settings.hrtfEnabled)?"natural":state.settings.hrtfProfile,
+    hrtfEffectiveEnabled:Boolean(state.hrtfEffectiveActive),
+    hrtfEffectiveProfile:state.hrtfEffectiveProfile||state.settings.hrtfProfile,
     hrtfDatasetFreeParametric:Boolean(state.settings.spatialEnabled && state.settings.spatialOutputTarget==="sonobus-mobile-headphones"),
     orbitKeeperEnabled: state.settings.orbitKeeperEnabled !== false,
     orbitHealthScore: Number(state.orbitHealthScore.toFixed(1)),
