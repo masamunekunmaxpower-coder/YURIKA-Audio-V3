@@ -1,3 +1,9 @@
+# YURIKA Audio 3.5.1 — GitHub CI Wiring Hotfix
+
+This build preserves the 3.5.0 R5 / Concert Hall / Amp / Stem DSP behavior and fixes the GitHub Actions wiring so the extended benches are actually executed. It also adds CI self-checks that fail if the R5/Hall workflow calls or expected reports disappear.
+
+**Important:** apply the *contents* of this package to the repository root, including `.github`, `.yurika-test-candidate.json`, and `.yurika-test-candidate-files.json`. The included `APPLY_TO_GITHUB_REPO.cmd` copies dot-directories and verifies the critical wiring.
+
 # YURIKA Audio V3 — Jiero Interactive Workstation
 
 V3は **YURIKA Audio v2.9.0 Auto Headphone Calibration** を音響コアとして維持し、ジーロ本人がシステムを案内するインタラクティブHTMLガイドを統合した配布版です。DSP設定スキーマは13のままで、音響アルゴリズムの互換性を保っています。
@@ -16,6 +22,29 @@ V3は **YURIKA Audio v2.9.0 Auto Headphone Calibration** を音響コアとし�
 
 Chrome / Edge 116+ 向けのローカル音声DSP拡張です。v2.5のImpact Liberation / Gain Arbiter / Scene Dynamics / Fast Sparkを維持しつつ、**Seam Naturalizer / Transient Valley / Orbit Keeper**を追加しました。外部通信・host permissionsはありません。
 
+
+
+## 3.5.0 R5 Reality Resolution EVAL
+
+This candidate adds **R5 Reality Resolution**, an experimental zero-lookahead temporal-microstructure stage based on five bounded non-frequency features: temporal velocity, curvature, short-predictor residual, fast/slow envelope contrast and stereo micro-coherence. A normalized fifth-order interaction is used only as a confidence gate; raw audio is never passed through a fifth-power waveshaper.
+
+GitHub evaluation renders the actual Chromium stage and compares a known pristine reference, a deterministic temporal/microdynamic degradation, and R5 output with 19 directional metrics including TFS/ENV, modulation, instantaneous phase, group delay, CPP-like periodicity, jitter/shimmer/HNR, Sample Entropy, bicoherence proxy, higher moments, transient preservation and R5 feature-space distance. See `R5_REALITY_RESEARCH_AND_METRICS.md`.
+
+The feature does not claim exact recovery of information destroyed by recording, quantization, compression or resampling. It is evaluated only as a bounded reconstruction/enhancement hypothesis.
+
+## 3.4.1 Concert Hall EVAL
+
+This evaluation candidate adds an independent **Digital Concert Hall** stage after 3D Spatial and before Auto Level / Virtual Amp / Limiter / Safety. The hall keeps the direct dry branch outside the reverb worklet and synthesizes only the reflected field.
+
+- Reference Shoebox / Vineyard / Chamber / Opera acoustic models
+- Front / Center / Rear / Balcony seat perspectives
+- 8-line Householder FDN late field + six geometry-specific early reflections
+- Frequency-dependent decay, bounded audience absorption and device-class output adaptation
+- Headphone/IEM wet-field reduction to avoid excessive spatial stacking
+- GitHub Chromium bench for RT60, EDT, C80, IACC, direct-path latency delta and final peak
+- Deterministic 48 kHz worklet simulation hard-gate (Reference Shoebox RT60 proxy about 2.05 s)
+
+The feature is a synthesized digital acoustic field. It does not claim physical equivalence to a named real concert hall. See `CONCERT_HALL_IMPLEMENTATION_REPORT.txt`.
 
 ## v2.6.0の追加機構
 

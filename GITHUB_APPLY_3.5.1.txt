@@ -1,0 +1,17 @@
+YURIKA Audio 3.5.1 - GitHub CI Wiring Hotfix
+
+Recommended Windows / GitHub Desktop procedure:
+1. Extract this ZIP outside the cloned repository.
+2. Double-click APPLY_TO_GITHUB_REPO.cmd.
+3. Paste the repository root path shown by GitHub Desktop > Repository > Show in Explorer.
+4. The installer copies ALL files including .github and .yurika-* files and verifies the critical wiring.
+5. In GitHub Desktop, confirm .github/workflows/audio-quality.yml is MODIFIED, not deleted.
+6. Commit all changes and Push origin.
+7. In Actions > Audio Quality, the run must include steps named:
+   - Extended benchmark wiring self-test
+   - Analyze Concert Hall bench
+   - Analyze R5 Reality Resolution bench
+   - Assert extended R5/Hall artifacts exist
+8. The artifact must include hall-report.md/json and reality-report.md/json.
+
+This hotfix does not claim new DSP sound changes beyond 3.5.0. Its purpose is to make the extended GitHub measurements authoritative and impossible to silently skip.
