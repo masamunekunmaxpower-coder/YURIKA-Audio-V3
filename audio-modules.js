@@ -18,33 +18,49 @@
   }
   function applyDacMatrixStage(stage,settings,ctx,initial=false) {
     if (!stage) return;
-    const p=M.dacMatrixProfile(settings.dacMatrixMode,settings.dacMatrixStrength,settings.dacAkmWeight,settings.dacEssWeight,settings.dacTiWeight), now=ctx.currentTime, enabled=p.mode!=="off";
+    const p=M.dacMatrixProfile(settings.dacMatrixMode,settings.dacMatrixStrength,settings.dacAkmWeight,settings.dacEssWeight,settings.dacTiWeight), now=ctx.currentTime, enabled=p.mode!=="off" && p.strength>0.000001;
     smooth(stage.bypass.gain,enabled?0:1,now,0.08); smooth(stage.processed.gain,enabled?1:0,now,0.08);
     smooth(stage.pre.gain,C.dbToGain(p.preDb),now,0.12); smooth(stage.low.gain,p.lowDb,now,0.14); smooth(stage.presence.gain,p.presenceDb,now,0.14); smooth(stage.high.gain,p.highDb,now,0.14);
     smooth(stage.direct.gain,Math.max(0.90,1-p.harmonic),now,0.12); smooth(stage.harm.gain,p.harmonic,now,0.12);
     smooth(stage.lowpass.frequency,Math.min(p.cutoffHz,ctx.sampleRate*0.47),now,0.18); stage.lowpass.Q.value=C.webAudioResonanceDb(p.q);
-    if (initial || stage._mode!==p.mode || Math.abs((stage._strength??-1)-p.strength)>1e-6) { stage.shaper.curve=C.makeSoftSaturationCurve(4096,p.drive); stage.shaper.oversample=settings.hiResMode?"4x":"2x"; stage._mode=p.mode; stage._strength=p.strength; }
+    const weightSig=p.weights?`${p.weights.akm.toFixed(6)}:${p.weights.ess.toFixed(6)}:${p.weights.ti.toFixed(6)}`:"none";
+    if (initial || stage._mode!==p.mode || Math.abs((stage._strength??-1)-p.strength)>1e-6 || stage._weightSig!==weightSig) {
+      stage.shaper.curve=C.makeSoftSaturationCurve(4096,p.drive); stage.shaper.oversample=settings.hiResMode?"4x":"2x";
+      stage._mode=p.mode; stage._strength=p.strength; stage._weightSig=weightSig;
+    }
   }
 
-  function createRoomIR(ctx) {
-    const len=Math.max(1,Math.floor(ctx.sampleRate*0.070)); const b=ctx.createBuffer(2,len,ctx.sampleRate);
+  function createRoomIR(ctx,decaySeconds=0.035) {
+    const decay=Math.max(0.012,Math.min(0.080,Number(decaySeconds)||0.035));
+    const len=Math.max(1,Math.floor(ctx.sampleRate*0.075)); const b=ctx.createBuffer(2,len,ctx.sampleRate);
     const taps=[[[11,0.24],[18,-0.12],[29,0.08],[43,-0.05],[61,0.025]],[[13,0.22],[21,-0.11],[32,0.075],[47,-0.045],[65,0.022]]];
-    for(let ch=0;ch<2;ch++){const d=b.getChannelData(ch); for(const [ms,a] of taps[ch]){const i=Math.min(d.length-1,Math.round(ctx.sampleRate*ms/1000));d[i]+=a;}}
+    for(let ch=0;ch<2;ch++){
+      const d=b.getChannelData(ch);
+      for(const [ms,a] of taps[ch]){
+        const i=Math.min(d.length-1,Math.round(ctx.sampleRate*ms/1000));
+        const envelope=Math.exp(-(ms/1000)/decay);
+        d[i]+=a*envelope;
+      }
+    }
     return b;
   }
   function createRoomStage(ctx,input) {
     const bypass=ctx.createGain(), processed=ctx.createGain(), out=ctx.createGain();
     const direct=ctx.createGain(), low=filter(ctx,"lowshelf",120), high=filter(ctx,"highshelf",7000), hp=filter(ctx,"highpass",120), lp=filter(ctx,"lowpass",15500), delay=ctx.createDelay(0.08), conv=ctx.createConvolver(), wet=ctx.createGain(), sum=ctx.createGain();
-    bypass.gain.value=1; processed.gain.value=0; conv.normalize=false; conv.buffer=createRoomIR(ctx); wet.gain.value=0;
+    bypass.gain.value=1; processed.gain.value=0; conv.normalize=false; conv.buffer=createRoomIR(ctx,0.035); wet.gain.value=0;
     input.connect(bypass); bypass.connect(out);
     input.connect(direct); direct.connect(low); low.connect(high); high.connect(sum); input.connect(hp); hp.connect(lp); lp.connect(delay); delay.connect(conv); conv.connect(wet); wet.connect(sum); sum.connect(processed); processed.connect(out);
-    return {output:out,stage:{bypass,processed,out,direct,low,high,hp,lp,delay,conv,wet,sum}};
+    return {output:out,stage:{bypass,processed,out,direct,low,high,hp,lp,delay,conv,wet,sum,_decaySeconds:0.035}};
   }
   function applyRoomStage(stage,settings,ctx) {
-    if(!stage)return; const p=M.roomProfile(settings.roomEnabled?settings.roomMode:"off",settings.roomAmount),now=ctx.currentTime,enabled=settings.roomEnabled && p.mode!=="off";
+    if(!stage)return; const p=M.roomProfile(settings.roomEnabled?settings.roomMode:"off",settings.roomAmount),now=ctx.currentTime,enabled=settings.roomEnabled && p.mode!=="off" && p.amount>0.000001;
     smooth(stage.bypass.gain,enabled?0:1,now,0.10); smooth(stage.processed.gain,enabled?1:0,now,0.10);
     smooth(stage.direct.gain,C.dbToGain(p.directDb),now,0.20); smooth(stage.low.gain,p.lowDb,now,0.20); smooth(stage.high.gain,p.highDb,now,0.20); smooth(stage.delay.delayTime,p.predelaySeconds,now,0.20); smooth(stage.wet.gain,p.wet,now,0.25);
     const lp=15000-(p.diffusion*3500); smooth(stage.lp.frequency,Math.min(lp,ctx.sampleRate*0.44),now,0.22);
+    if(enabled && Math.abs((stage._decaySeconds||0)-p.decaySeconds)>0.0005){
+      stage.conv.buffer=createRoomIR(ctx,p.decaySeconds); stage._decaySeconds=p.decaySeconds;
+    }
+    stage._profile={...p,effectiveDecaySeconds:stage._decaySeconds||p.decaySeconds};
   }
 
   // Integrity DC blocking must remain numerically stable at 96 kHz. A second-order
@@ -66,11 +82,14 @@
   function applyIntegrityStage(stage,settings,ctx) {
     if(!stage)return; const mode=settings.integrityEnabled?settings.integrityMode:"off",p=M.integrityProfile(mode,settings.integrityStrength),now=ctx.currentTime;
     const use35=p.enabled && p.dcBlockHz>0 && p.dcBlockHz<4.25, use5=p.enabled && p.dcBlockHz>=4.25;
-    // off/transparent are bit-clean unity paths; explicit stability modes select a DC blocker.
-    smooth(stage.bypass.gain,(use35||use5)?0:1,now,p.smoothingSeconds);
-    smooth(stage.dc35Gain.gain,use35?1:0,now,p.smoothingSeconds);
-    smooth(stage.dc5Gain.gain,use5?1:0,now,p.smoothingSeconds);
-    stage._profile={...p,implementation:"stable-first-order-iir",effectiveDcBlockHz:use35?3.5:(use5?5:0)};
+    // Strength is a real dry/processed blend. Because the DC-blocked path is almost perfectly
+    // correlated with dry audio, complementary linear gains preserve unity far better than an
+    // equal-power crossfade here.
+    const mix=(use35||use5)?Math.max(0,Math.min(1,p.strength)):0;
+    smooth(stage.bypass.gain,1-mix,now,p.smoothingSeconds);
+    smooth(stage.dc35Gain.gain,use35?mix:0,now,p.smoothingSeconds);
+    smooth(stage.dc5Gain.gain,use5?mix:0,now,p.smoothingSeconds);
+    stage._profile={...p,implementation:"stable-first-order-iir-strength-blend",effectiveDcBlockHz:use35?3.5:(use5?5:0),effectiveMix:mix};
   }
 
   function createCartridgeBranch(ctx,input) {

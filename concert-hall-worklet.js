@@ -21,11 +21,15 @@ class YurikaConcertHallProcessor extends AudioWorkletProcessor {
     this.feedback = new Float32Array(8);
     this.reads = new Float32Array(8);
     this.modRates = [0.071,0.083,0.097,0.109,0.121,0.137,0.149,0.163];
+    // Static mix signs: never allocate arrays inside the realtime sample loop.
+    this.signL = new Int8Array([1,-1,1,1,-1,1,-1,-1]);
+    this.signR = new Int8Array([1,1,-1,1,1,-1,-1,1]);
     this.modDepthSamples = this.lineMs.map((_,i)=>sampleRate * ((0.055 + i*0.006)/1000));
     this._recalc();
     this.port.onmessage = (event) => {
       const m = event.data || {};
       if (m.type === "config") {
+        const wasEnabled = this.cfg.enabled !== false;
         this.cfg = { ...this.cfg, ...m };
         this.cfg.rt60 = Math.max(0.8, Math.min(4.5, Number(this.cfg.rt60)||2.05));
         this.cfg.predelayMs = Math.max(0, Math.min(45, Number(this.cfg.predelayMs)||17));
@@ -35,6 +39,8 @@ class YurikaConcertHallProcessor extends AudioWorkletProcessor {
         this.cfg.diffusion = Math.max(0.25, Math.min(0.98, Number(this.cfg.diffusion)||0.86));
         this.cfg.width = Math.max(0.5, Math.min(1.4, Number(this.cfg.width)||1));
         this.cfg.wetTrim = Math.max(0.25, Math.min(1.25, Number(this.cfg.wetTrim)||0.92));
+        // Once disabled, discard the tail so re-enabling cannot revive stale FDN state.
+        if (wasEnabled && this.cfg.enabled === false) this._reset();
         this._recalc();
       } else if (m.type === "reset") this._reset();
     };
@@ -92,14 +98,20 @@ class YurikaConcertHallProcessor extends AudioWorkletProcessor {
     const outL = output[0], outR = output[1] || output[0];
     if (!outL) return true;
     const inL = input[0], inR = input[1] || input[0];
-    const pred = this.cfg.predelayMs * sampleRate / 1000;
     const enabled = this.cfg.enabled !== false;
+    // This node is wet-only. When Hall is disabled, do not run the FDN at all.
+    if (!enabled) {
+      outL.fill(0);
+      if (outR && outR !== outL) outR.fill(0);
+      return true;
+    }
+    const pred = this.cfg.predelayMs * sampleRate / 1000;
     const diff = this.cfg.diffusion;
     const width = this.cfg.width;
     const wetTrim = this.cfg.wetTrim;
     for (let s=0; s<outL.length; s++) {
-      const L = enabled && inL ? (inL[s] || 0) : 0;
-      const R = enabled && inR ? (inR[s] || 0) : L;
+      const L = inL ? (inL[s] || 0) : 0;
+      const R = inR ? (inR[s] || 0) : L;
       this.preL[this.prePos] = L; this.preR[this.prePos] = R;
 
       let eL=0, eR=0;
@@ -123,7 +135,7 @@ class YurikaConcertHallProcessor extends AudioWorkletProcessor {
       }
       const mean=sum/8;
       let lateL=0, lateR=0;
-      const signL=[1,-1,1,1,-1,1,-1,-1], signR=[1,1,-1,1,1,-1,-1,1];
+      const signL=this.signL, signR=this.signR;
       for (let i=0;i<8;i++) {
         // Energy-preserving Householder feedback.  Diffusion controls
         // modulation/early-field density elsewhere; it must not shorten RT60.

@@ -1,0 +1,128 @@
+YURIKA Audio - GIRO MONATIUM 3.4.1 Concert Hall EVAL
+Digital Concert Hall / GitHub Audio-Quality Evaluation Candidate
+Date: 2026-09-27
+
+0. PURPOSE
+This build adds a bounded, measurable digital concert-hall layer to the existing YURIKA Audio graph.
+It is not advertised as a bit-identical copy of a named physical venue. The goal is to synthesize the main
+engineering cues described by concert-hall acoustics: direct sound, early reflections, diffusion, absorption,
+late reverberation, geometry/seat differences, and device-aware reproduction.
+
+Reference article supplied by the user:
+https://dis-media.com/concert-hall-onkyo-sekkei-zankyo-shikumi.html
+The article describes RT60 as a core metric, classical-hall targets around 1.8-2.2 s, the balance of reflection /
+diffusion / absorption, shoebox and vineyard geometry differences, seat-dependent direct/reflected balance,
+and electronic variable-reverberation systems. It also cautions that electronic processing does not prove
+full equivalence to a real physical hall. This implementation follows that caution.
+
+1. SIGNAL POSITION
+Existing DSP -> HRTF -> Headphone Correction -> Transient Valley -> 3D Spatial
+ -> Concert Hall [NEW] -> Auto Level -> Adaptive Trim -> Virtual Amp -> Limiter -> Safety -> A/V Sync -> Destination
+
+The Concert Hall stage has a persistent native dry path. The AudioWorklet is wet-only.
+Pre-delay and early-reflection delays therefore create acoustic distance without adding serial delay to direct sound.
+
+2. HALL ENGINE
+Backend: AudioWorklet
+Core late field: 8 delay-line FDN with energy-preserving Householder feedback, frequency-dependent damping,
+small deterministic delay modulation, and stereo output matrix.
+Early field: six geometry-specific lateral/reflected taps.
+External IR/CDN/network dependency: none.
+Per-sample heap allocation: none in the processing loop.
+
+Reference modes:
+- Reference Shoebox: nominal RT60 2.05 s
+- Vineyard: nominal RT60 1.88 s
+- Chamber: nominal RT60 1.52 s
+- Opera: nominal RT60 1.46 s
+
+Seat models:
+- Front: more direct / shorter acoustic pre-delay
+- Center: reference balance
+- Rear: stronger reflected field / longer pre-delay
+- Balcony: wider and somewhat stronger reflected field
+
+3. REFLECTION / DIFFUSION / ABSORPTION
+Reflection: six geometry-specific early taps plus late FDN injection.
+Diffusion: Householder feedback network, decorrelated stereo signs, deterministic micro-modulation.
+Absorption: frequency-dependent feedback damping plus bounded Audience / Absorption control.
+
+Audience / Absorption is intentionally a small correction rather than a huge effect. The system assumes a well-designed
+venue whose seats/materials reduce empty-vs-occupied variation. Default occupancy is 70%.
+
+4. OUTPUT-DESTINATION ADAPTATION
+The hall resolves output class from existing YURIKA Spatial/device information.
+Wet amount and HF decay are adapted conservatively:
+- Headphone / IEM / Earbuds: reduced wet level to avoid over-binauralization after HRTF/Spatial.
+- Speaker / Studio Monitor: fuller room field.
+- Laptop / TV / remote speaker: bounded wet and HF adaptation.
+- SonoBus remote headphones/speakers: separate output-class factors.
+
+This is device-class adaptation, not a claim that the extension measures the physical room or exact transducer response.
+
+5. LATENCY POLICY
+Concert Hall serial added latency target: 0 ms on the dry direct path.
+Wet path pre-delay is acoustic simulation and is not counted as transport/direct-path latency.
+The existing AudioContext policy is also changed to request latencyHint=interactive for general local and Hi-Res paths,
+with safe fallbacks. Actual baseLatency/outputLatency remains browser/OS/device dependent and must be measured.
+
+6. HRTF / HEADPHONE STATE-SYNC HARDENING
+This candidate also carries the state-sync fix required by the existing 3.3.2 GitHub source:
+- Runtime output labels participate in Headphone/HRTF intent detection.
+- Device/sink changes re-apply HRTF/Headphone and Spatial together when output identity changes.
+- Spatial double-HRTF guard consumes the actual effective HRTF state, not only the saved setting.
+- Diagnostics expose actual effective state consistently.
+- Remote SonoBus implicit HRTF fallback is natural rather than the stale front value.
+
+7. GITHUB AUDIO-QUALITY BENCH
+Added:
+- tests/concert_hall_contract_test.js
+- tests/concert_hall_worklet_sim_test.js
+- tests/audio_quality/generate_hall_stimulus.py
+- tests/audio_quality/hall_metrics.py
+- Hall capture path in specialized-runtime.js / run_specialized_playwright.mjs
+
+Metrics/gates include:
+- Dry direct-path latency delta
+- Signal-derived RT60 proxy and EDT
+- C80 clarity
+- Early / late IACC
+- Final peak / non-finite guard
+- Runtime hall parameters
+
+The report explicitly labels these as objective proxies for the synthesized digital field, not proof that the output equals
+a specific real concert hall.
+
+8. LOCAL DETERMINISTIC CHECKS
+Reference Shoebox direct Worklet simulation at 48 kHz:
+- Wet peak onset/peak: approx. 28.396 ms (17 ms wet pre-delay + early reflection geometry)
+- RT60 proxy (-5 to -35 dB regression): approx. 2.047 s
+- Wet impulse peak: approx. 0.1083
+- Dry serial delay: 0 by graph contract (dry branch bypasses Worklet)
+
+9. JIIRO / YURIKA MCP REVIEW POLICY
+Only lightweight deterministic mechanisms were used for this work:
+- bootstrap/runtime orientation
+- candidate comparison
+- bounded intuition ensemble with model generation disabled
+- semantic state-machine preview
+- Z3 logic consistency checks
+- deterministic CPU multi-lens review
+No 45B generation/review is required for this candidate.
+
+10. LIMITS
+- No claim of physically perfect hall reproduction.
+- No personal HRTF / room microphone calibration.
+- No real-device RT60 or I/O-latency result is fabricated locally.
+- The definitive Chromium/Web Audio result is the GitHub Actions audio-quality run.
+
+11. CUMULATIVE 3.4.0 FEATURES PRESERVED IN THIS GITHUB TREE
+The user requested this hall build as an addition to the preceding 3.4.0 evaluation changes, so this 3.4.1 GitHub
+candidate also carries those features instead of regressing to the uploaded 3.3.2 production behavior:
+- Low-latency five-bus soft separator: Bass / Drums / Voice / Effects / Ambient.
+- Residual-preserving recombination so the five buses sum back to the source within floating-point error.
+- Stem algorithmic lookahead: 0 frames; semantic/perfect source separation is not claimed.
+- Virtual Amp linked Op-Amp feedback/DC-servo subsystem.
+- User-adjustable P1dB-equivalent software headroom extension, default +12 dB (bounded 0..18 dB).
+- Dynamic signal-dependent Amp power, P1dB margin, S/N-model and THD+N-model diagnostics.
+- Deterministic stem/amp runtime smoke test in the GitHub hard-gate.

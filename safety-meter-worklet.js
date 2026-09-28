@@ -5,6 +5,7 @@ class YurikaSafetyMeterProcessor extends AudioWorkletProcessor {
     super();
     this.resetAccumulators();
     this.reportEveryFrames = 4096;
+    this.faultPosted = false;
   }
 
   resetAccumulators() {
@@ -27,7 +28,11 @@ class YurikaSafetyMeterProcessor extends AudioWorkletProcessor {
     const input = inputs[0] || [];
     const output = outputs[0] || [];
     const channels = Math.min(input.length, output.length);
-    const frames = channels ? Math.min(...input.slice(0, channels).map((ch) => ch.length)) : 0;
+    let frames = 0;
+    if (channels) {
+      frames = input[0]?.length || 0;
+      for (let ch=1; ch<channels; ch++) frames = Math.min(frames, input[ch]?.length || 0);
+    }
     this.channelCount = Math.max(this.channelCount, channels);
 
     for (let ch = 0; ch < output.length; ch++) {
@@ -42,6 +47,10 @@ class YurikaSafetyMeterProcessor extends AudioWorkletProcessor {
         if (!Number.isFinite(value)) {
           value = 0;
           this.nonFiniteCount++;
+          if (this.nonFiniteCount >= 4 && !this.faultPosted) {
+            this.faultPosted = true;
+            this.port.postMessage({ type:"fault", nonFiniteCount:this.nonFiniteCount });
+          }
         }
         out[i] = value;
         const abs = Math.abs(value);
@@ -98,6 +107,7 @@ class YurikaSafetyMeterProcessor extends AudioWorkletProcessor {
         clipCount: this.clipCount
       });
       this.resetAccumulators();
+      this.faultPosted = false;
     }
     return true;
   }

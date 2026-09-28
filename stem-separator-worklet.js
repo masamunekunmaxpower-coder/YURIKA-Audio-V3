@@ -18,9 +18,20 @@ class YurikaFiveStemSeparatorProcessor extends AudioWorkletProcessor {
     this.framesAccum = 0;
     this.port.onmessage = (event) => {
       const d = event?.data || {};
-      if (d.type === "config") this.enabled = d.enabled !== false;
+      if (d.type === "config") {
+        const nextEnabled = d.enabled !== false;
+        if (this.enabled && !nextEnabled) this._resetState();
+        this.enabled = nextEnabled;
+      }
       if (Number.isFinite(Number(d.reportEveryBlocks))) this.reportEveryBlocks = Math.max(8, Math.min(256, Number(d.reportEveryBlocks)|0));
     };
+  }
+
+  _resetState() {
+    this.bassL = 0; this.bassR = 0;
+    this.voiceLow = 0; this.voiceHigh = 0;
+    this.fastEnv = 0; this.slowEnv = 0;
+    this.energy.fill(0); this.totalEnergy = 0; this.reconstructionError = 0; this.framesAccum = 0; this.reportBlocks = 0;
   }
 
   process(inputs, outputs) {
@@ -28,15 +39,36 @@ class YurikaFiveStemSeparatorProcessor extends AudioWorkletProcessor {
     const inL = input[0];
     const inR = input[1] || input[0];
     const frames = outputs[0]?.[0]?.length || 128;
+
+    // Disabled means transparent recombination. Avoid all separation analysis and metrics.
+    if (!this.enabled) {
+      for (let s = 0; s < 5; s++) {
+        const a = outputs[s]?.[0], b = outputs[s]?.[1];
+        if (a) a.fill(0);
+        if (b) b.fill(0);
+      }
+      const effectsOutL = outputs[3]?.[0], effectsOutR = outputs[3]?.[1];
+      for (let i = 0; i < frames; i++) {
+        const l = inL?.[i] || 0;
+        const r = inR?.[i] ?? l;
+        if (effectsOutL) effectsOutL[i] = l;
+        if (effectsOutR) effectsOutR[i] = r;
+      }
+      return true;
+    }
+
+    const bassOutL=outputs[0]?.[0], bassOutR=outputs[0]?.[1];
+    const drumsOutL=outputs[1]?.[0], drumsOutR=outputs[1]?.[1];
+    const voiceOutL=outputs[2]?.[0], voiceOutR=outputs[2]?.[1];
+    const effectsOutL=outputs[3]?.[0], effectsOutR=outputs[3]?.[1];
+    const ambientOutL=outputs[4]?.[0], ambientOutR=outputs[4]?.[1];
+
     for (let i = 0; i < frames; i++) {
       const l = inL?.[i] || 0;
       const r = inR?.[i] ?? l;
 
       let bassL = 0, bassR = 0, drumsL = 0, drumsR = 0, voiceL = 0, voiceR = 0, effectsL = 0, effectsR = 0, ambientL = 0, ambientR = 0;
-      if (!this.enabled) {
-        effectsL = l; effectsR = r;
-      } else {
-        this.bassL = this.alphaBass * this.bassL + (1 - this.alphaBass) * l;
+      this.bassL = this.alphaBass * this.bassL + (1 - this.alphaBass) * l;
         this.bassR = this.alphaBass * this.bassR + (1 - this.alphaBass) * r;
         bassL = this.bassL; bassR = this.bassR;
 
@@ -74,19 +106,19 @@ class YurikaFiveStemSeparatorProcessor extends AudioWorkletProcessor {
         const ambienceSide = rem3Side * ambienceWeight;
         ambientL = ambienceSide;
         ambientR = -ambienceSide;
-        effectsL = rem3L - ambientL;
-        effectsR = rem3R - ambientR;
-      }
+      effectsL = rem3L - ambientL;
+      effectsR = rem3R - ambientR;
 
-      const stems = [
-        [bassL, bassR], [drumsL, drumsR], [voiceL, voiceR], [effectsL, effectsR], [ambientL, ambientR]
-      ];
-      for (let s = 0; s < 5; s++) {
-        const outL = outputs[s]?.[0], outR = outputs[s]?.[1];
-        if (outL) outL[i] = stems[s][0];
-        if (outR) outR[i] = stems[s][1];
-        this.energy[s] += stems[s][0] * stems[s][0] + stems[s][1] * stems[s][1];
-      }
+      if (bassOutL) bassOutL[i]=bassL; if (bassOutR) bassOutR[i]=bassR;
+      if (drumsOutL) drumsOutL[i]=drumsL; if (drumsOutR) drumsOutR[i]=drumsR;
+      if (voiceOutL) voiceOutL[i]=voiceL; if (voiceOutR) voiceOutR[i]=voiceR;
+      if (effectsOutL) effectsOutL[i]=effectsL; if (effectsOutR) effectsOutR[i]=effectsR;
+      if (ambientOutL) ambientOutL[i]=ambientL; if (ambientOutR) ambientOutR[i]=ambientR;
+      this.energy[0] += bassL*bassL + bassR*bassR;
+      this.energy[1] += drumsL*drumsL + drumsR*drumsR;
+      this.energy[2] += voiceL*voiceL + voiceR*voiceR;
+      this.energy[3] += effectsL*effectsL + effectsR*effectsR;
+      this.energy[4] += ambientL*ambientL + ambientR*ambientR;
       const sumL = bassL + drumsL + voiceL + effectsL + ambientL;
       const sumR = bassR + drumsR + voiceR + effectsR + ambientR;
       this.reconstructionError = Math.max(this.reconstructionError, Math.abs(sumL - l), Math.abs(sumR - r));

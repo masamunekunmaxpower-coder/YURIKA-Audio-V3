@@ -53,7 +53,7 @@
       label:settings.spatialOutputLabel,
       legacyDeviceProfile:settings.deviceProfile,
       outputTarget:settings.spatialOutputTarget,
-      headphoneIntent:Boolean(settings.deviceProfile === "headphone" || settings.headphoneOutputDeviceId || settings.headphoneOutputLabel || settings.headphoneCorrectionEnabled)
+      headphoneIntent:Boolean(settings.headphoneEffectiveMode ?? (settings.deviceProfile === "headphone" || settings.headphoneOutputDeviceId || settings.headphoneOutputLabel || settings.headphoneCorrectionEnabled))
     }) || { profile:{}, profileId:"generic-stereo-speaker", reason:"registry-unavailable", confidence:0 };
     const profile = r.profile || {};
     const mode = MODE_SHAPES[settings.spatialMode] || MODE_SHAPES.auto;
@@ -62,7 +62,7 @@
     const speakerLike = !headphoneLike;
     const baseStrength = clamp(profile.spatialStrength, 0, 0.8);
     const strength = clamp(baseStrength * mode.strength, 0, 0.80);
-    const hrtfAlreadyActive = Boolean(settings.hrtfEnabled) && headphoneLike;
+    const hrtfAlreadyActive = Boolean(settings.hrtfEffectiveEnabled ?? settings.hrtfEnabled) && headphoneLike;
     const remoteBinaural = profile.deviceType === "remote-binaural";
     // When HRTF already carries interaural localization cues, Spatial must add depth without
     // creating a second strong lateralization field. The factor intentionally preserves a
@@ -70,7 +70,8 @@
     const cuePreservationFactor = hrtfAlreadyActive ? (remoteBinaural ? 0.26 : 0.30) : 1.0;
 
     const width = clamp(strength * mode.width * sc.width, 0, headphoneLike ? 0.72 : 0.62);
-    const depth = clamp(strength * mode.depth * sc.depth, 0, 0.72);
+    const distanceStrength = clamp(profile.distanceStrength ?? 0.30, 0, 1);
+    const depth = clamp(strength * mode.depth * sc.depth * (0.74 + 0.52 * distanceStrength), 0, 0.72);
     const elevation = clamp(strength * clamp(profile.elevationStrength, 0, 1) * mode.elevation, 0, 0.24);
     const lowCentering = profile.lowFrequencyPolicy === "strict-center" ? 0.78 : 0.62;
     const sideLowDb = -clamp((1.0 + 4.0 * width * lowCentering) * cuePreservationFactor, 0, 4.8);
@@ -87,8 +88,8 @@
     // Generic speaker crosstalk cancellation intentionally remains zero. Calibrated cancellation is a future profile feature.
     const crosstalkControl = speakerLike ? clamp(profile.crosstalkControl, -0.012, 0) : 0;
     const estimatedCrosstalk = headphoneLike ? crossfeed : Math.abs(crosstalkControl);
-    const outputGainCompensationDb = clamp(Number(profile.outputGainCompensation || 0) - 0.28 * width - 0.22 * reflection * 10, -1.6, 0);
     const safeHeadroomDb = clamp(Number(profile.safeHeadroom || 1.2) + 0.35 * width, 0.8, 2.2);
+    const outputGainCompensationDb = clamp(Number(profile.outputGainCompensation || 0) - 0.28 * width - 0.22 * reflection * 10 - 0.10 * Math.max(0,safeHeadroomDb-1.2), -1.8, 0);
     const pinnaGainDb = headphoneLike ? clamp(elevation * 2.2 * (hrtfAlreadyActive ? 0.45 : 1), 0, 0.50) : clamp(elevation * 1.2, 0, 0.20);
 
     return freeze({
@@ -96,7 +97,7 @@
       mode:settings.spatialMode || "auto",
       profileId:r.profileId || profile.id || "unknown",
       deviceType:profile.deviceType || "speaker", remoteBinaural,
-      strength,width,depth,elevation,cuePreservationFactor,
+      strength,width,depth,elevation,distanceStrength,cuePreservationFactor,
       centerGain, sideGain, sideLowDb, sideHighDb,
       sideDelaySeconds, ildAmountDb,
       earlyReflection:reflection, reflectionDelaySeconds, reflectionLowpassHz, reflectionHighpassHz,
@@ -233,7 +234,7 @@
   function apply(stage, settings={}, { resolved=null, scene={}, initial=false } = {}) {
     if (!stage?.ctx) return null;
     const ctx=stage.ctx, now=ctx.currentTime;
-    const r = resolved || Registry?.resolve?.({ requestedProfile:settings.spatialDeviceProfile, outputTarget:settings.spatialOutputTarget, label:settings.spatialOutputLabel, legacyDeviceProfile:settings.deviceProfile, headphoneIntent:Boolean(settings.deviceProfile === "headphone" || settings.headphoneOutputDeviceId || settings.headphoneOutputLabel || settings.headphoneCorrectionEnabled) });
+    const r = resolved || Registry?.resolve?.({ requestedProfile:settings.spatialDeviceProfile, outputTarget:settings.spatialOutputTarget, label:settings.spatialOutputLabel, legacyDeviceProfile:settings.deviceProfile, headphoneIntent:Boolean(settings.headphoneEffectiveMode ?? (settings.deviceProfile === "headphone" || settings.headphoneOutputDeviceId || settings.headphoneOutputLabel || settings.headphoneCorrectionEnabled)) });
     const p = computeParameters(settings,{resolved:r,scene,sampleRate:ctx.sampleRate,inputChannels:stage.inputChannels});
     stage.resolved=r; stage.lastParams=p;
     const enabled=Boolean(settings.spatialEnabled);
@@ -246,7 +247,10 @@
       smooth(stage.sideLow.gain,p.sideLowDb,now,initial?0.08:0.30);
       smooth(stage.sideHigh.gain,p.sideHighDb,now,initial?0.08:0.30);
       smooth(stage.sideDelay.delayTime,p.sideDelaySeconds,now,initial?0.08:0.30);
-      smooth(stage.sideGain.gain,p.sideGain,now,initial?0.08:0.30);
+      // ILD is a magnitude cue, not a direction. Apply it symmetrically as bounded side-level
+      // contrast instead of biasing one ear/channel permanently.
+      const ildContrast = dbToGain(p.ildAmountDb * 0.35);
+      smooth(stage.sideGain.gain,clamp(p.sideGain*ildContrast,1,1.26),now,initial?0.08:0.30);
       smooth(stage.reflDelayL.delayTime,p.reflectionDelaySeconds,now,0.32);
       smooth(stage.reflDelayR.delayTime,Math.min(0.025,p.reflectionDelaySeconds*1.13),now,0.32);
       for (const f of [stage.reflHpL,stage.reflHpR]) smooth(f.frequency,p.reflectionHighpassHz,now,0.32);
@@ -281,6 +285,6 @@
   }
 
   globalThis.YurikaSpatialEngine = freeze({
-    VERSION:"1.3.0", MODE_SHAPES, computeParameters, createStage, apply, dispose
+    VERSION:"1.4.0", MODE_SHAPES, computeParameters, createStage, apply, dispose
   });
 })();

@@ -2,10 +2,10 @@
   "use strict";
 
   const DAP_MODES = Object.freeze(["off", "reference", "warm", "natural", "tube"]);
-  const SETTINGS_SCHEMA_VERSION = 19;
+  const SETTINGS_SCHEMA_VERSION = 20;
   const SETTINGS_KEYS = Object.freeze([
     "enabled","preset","lowCutHz","bassDb","warmthDb","clarityDb","airDb","outputDb","compressor",
-    "detail","width","reality","noiseReduction","spectralFill","hiResMode",
+    "detail","width","reality","noiseReduction","spectralFill","hiResMode","aiHiResEnabled","aiHiResAmount",
     "dapMode","dapStrength","selfDapEnabled","selfDapStrength","selfDapRestoration","selfDapRestorationCutoffKhz",
     "perspectiveEnabled","perspectiveDepth","spatialEnabled","spatialMode","spatialDeviceProfile","spatialOutputTarget","spatialOutputDeviceId","spatialOutputLabel","concertHallEnabled","concertHallMode","concertHallSeat","concertHallAmount","concertHallOccupancy","r5RealityEnabled","r5RealityAmount","r5RealityMode","virtualAmpEnabled","virtualAmpOpAmpEnabled","virtualAmpHeadroomDb","stemSeparationEnabled","adaptiveSafetyEnabled",
     "sceneEnabled","sceneStrength","sceneExponent","sceneInertia","sparkEnabled","sparkAmount","impactEnabled","impactAmount","seamNaturalizerEnabled","seamNaturalizerAmount","transientValleyEnabled","transientValleyAmount","transientEdgeEnabled","transientEdgeAmount","transientEdgeTone","orbitKeeperEnabled","deviceProfile","multiSpeakerEnabled","multiSpeakerAmount",
@@ -32,6 +32,7 @@
   const SPATIAL_KEYS = Object.freeze(["spatialEnabled","spatialMode","spatialDeviceProfile","spatialOutputTarget","spatialOutputDeviceId","spatialOutputLabel"]);
   const CONCERT_HALL_KEYS = Object.freeze(["concertHallEnabled","concertHallMode","concertHallSeat","concertHallAmount","concertHallOccupancy"]);
   const R5_REALITY_KEYS = Object.freeze(["r5RealityEnabled","r5RealityAmount","r5RealityMode"]);
+  const AI_HIRES_KEYS = Object.freeze(["aiHiResEnabled","aiHiResAmount"]);
   const VIRTUAL_AMP_KEYS = Object.freeze(["virtualAmpEnabled","virtualAmpOpAmpEnabled","virtualAmpHeadroomDb"]);
   const STEM_KEYS = Object.freeze(["stemSeparationEnabled"]);
   const SAFETY_KEYS = Object.freeze(["adaptiveSafetyEnabled","autoLevelEnabled","autoLevelProfile","autoLevelTargetDbfs"]);
@@ -61,6 +62,8 @@
     noiseReduction: 15,
     spectralFill: 20,
     hiResMode: false,
+    aiHiResEnabled: false,
+    aiHiResAmount: 40,
     dapMode: "off",
     dapStrength: 35,
     selfDapEnabled: false,
@@ -86,7 +89,7 @@
     virtualAmpEnabled: true,
     virtualAmpOpAmpEnabled: true,
     virtualAmpHeadroomDb: 12,
-    stemSeparationEnabled: true,
+    stemSeparationEnabled: false,
     adaptiveSafetyEnabled: true,
     sceneEnabled: false,
     sceneStrength: 55,
@@ -204,6 +207,8 @@
       noiseReduction: clampNumber(raw.noiseReduction, 0, 100, DEFAULTS.noiseReduction),
       spectralFill: clampNumber(raw.spectralFill, 0, 100, DEFAULTS.spectralFill),
       hiResMode: Boolean(raw.hiResMode),
+      aiHiResEnabled: Boolean(raw.aiHiResEnabled),
+      aiHiResAmount: clampNumber(raw.aiHiResAmount, 0, 100, DEFAULTS.aiHiResAmount),
       dapMode: DAP_MODES.includes(requestedDapMode) ? requestedDapMode : DEFAULTS.dapMode,
       dapStrength: clampNumber(raw.dapStrength, 0, 100, DEFAULTS.dapStrength),
       selfDapEnabled: Boolean(raw.selfDapEnabled),
@@ -229,7 +234,7 @@
       virtualAmpEnabled: raw.virtualAmpEnabled !== false,
       virtualAmpOpAmpEnabled: raw.virtualAmpOpAmpEnabled !== false,
       virtualAmpHeadroomDb: clampNumber(raw.virtualAmpHeadroomDb, 0, 18, DEFAULTS.virtualAmpHeadroomDb),
-      stemSeparationEnabled: raw.stemSeparationEnabled !== false,
+      stemSeparationEnabled: Boolean(raw.stemSeparationEnabled),
       adaptiveSafetyEnabled: raw.adaptiveSafetyEnabled !== false,
       sceneEnabled: Boolean(raw.sceneEnabled),
       sceneStrength: clampNumber(raw.sceneStrength, 0, 100, DEFAULTS.sceneStrength),
@@ -415,7 +420,7 @@
     const s = sanitizeSettings(settings);
     const positiveEq = [s.bassDb, s.warmthDb, s.clarityDb, s.airDb]
       .reduce((sum, value) => sum + Math.max(0, value), 0);
-    const enhancementBudget = (s.spectralFill * 0.028) + (s.detail * 0.012) + (s.reality * 0.010) + (s.width * 0.004);
+    const enhancementBudget = (s.spectralFill * 0.028) + (s.detail * 0.012) + (s.reality * 0.010) + (s.width * 0.004) + (s.aiHiResEnabled ? s.aiHiResAmount * 0.006 : 0);
     const dap = dapProfile(s.dapMode, s.dapStrength);
     const dapBudget = Math.max(0, dap.lowDb) * 0.55 + Math.max(0, dap.highDb) * 0.45 + dap.harmonic * 9 + dap.crossfeed * 2;
     const selfDapBudget = s.selfDapEnabled ? (s.selfDapStrength / 100) * 2.4 : 0;
@@ -505,7 +510,7 @@
   }
 
   globalThis.YurikaAudioCore = Object.freeze({
-    DEFAULTS, PRESETS, DAP_MODES, SETTINGS_SCHEMA_VERSION, SETTINGS_KEYS, PRESET_AUDIO_KEYS, R5_REALITY_KEYS,
+    DEFAULTS, PRESETS, DAP_MODES, SETTINGS_SCHEMA_VERSION, SETTINGS_KEYS, PRESET_AUDIO_KEYS, R5_REALITY_KEYS, AI_HIRES_KEYS,
     VIRTUAL_DAP_KEYS, SELF_DAP_KEYS, PERSPECTIVE_KEYS, SPATIAL_KEYS, CONCERT_HALL_KEYS, VIRTUAL_AMP_KEYS, STEM_KEYS, SAFETY_KEYS, SCENE_KEYS, DAC_MATRIX_KEYS, ROOM_KEYS, INTEGRITY_KEYS, DJ_KEYS, CARTRIDGE_KEYS, SYSTEM_PRESET_NAMES, MANUAL_EDIT_KEYS, clamp, dbToGain, sanitizeSettings,
     sanitizeSettingsPatch, sanitizeManualPatch, migrateStoredSettings, applyPreset, applyManualPatch, diffSettings, computeAutoHeadroomDb,
     computeEffectiveOutputDb, dapProfile, perspectiveProfile, widthToMatrix, spectralFillGains, detailMixGain,

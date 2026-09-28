@@ -56,7 +56,7 @@ class YurikaVirtualClassAProcessor extends AudioWorkletProcessor {
     const inL = input[0], inR = input[1] || input[0], outL = output[0], outR = output[1];
     if (!outL) return true;
 
-    if (!this.exports || !this.buffer) {
+    if (!this.exports || !this.buffer || (this.targetMix === 0 && this.mix === 0)) {
       for (let i=0;i<frames;i++) { const l=inL?.[i]||0,r=inR?.[i]??l; outL[i]=l; if(outR)outR[i]=r; }
       return true;
     }

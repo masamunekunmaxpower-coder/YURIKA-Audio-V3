@@ -1,0 +1,32 @@
+{
+  "version": "3.7.0",
+  "fs": 96000,
+  "windowFrames": 8192,
+  "targets": [
+    "harmonic",
+    "transient",
+    "texture",
+    "ambience",
+    "bwe",
+    "sr"
+  ],
+  "origins": {
+    "paired_synthetic_96to48to96": {
+      "rows": 1200,
+      "meanBwe": 0.5449526018576015,
+      "meanSr": 0.37832831055299,
+      "meanHfRatio": 1.7150759818739585
+    },
+    "real_selfsupervised_96to48to96": {
+      "rows": 600,
+      "sourceFrames": 110234879,
+      "durationSeconds": 1148.2799895833334,
+      "meanBwe": 0.0171268497919617,
+      "meanSr": 0.2006825394633868,
+      "meanHfRatio": 0.030705442723052468
+    }
+  },
+  "rows": 1800,
+  "trainRows": 1440,
+  "validRows": 360
+}

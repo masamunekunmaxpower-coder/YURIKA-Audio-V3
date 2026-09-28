@@ -1,175 +1,97 @@
 name: Audio Quality
-
 on:
   workflow_dispatch:
   push:
+    paths:
+      - "manifest.json"
+      - "*.js"
+      - "*.wasm"
+      - "dart-detector/**"
+      - "controller-training/**"
+      - "matlab-numeric/**"
+      - "sr-training/**"
+      - "tests/**"
+      - "tools/**"
+      - ".yurika-test-candidate*.json"
+      - ".github/workflows/audio-quality.yml"
   pull_request:
-
-concurrency:
-  group: audio-quality-${{ github.ref }}
-  cancel-in-progress: true
+    paths:
+      - "manifest.json"
+      - "*.js"
+      - "*.wasm"
+      - "dart-detector/**"
+      - "controller-training/**"
+      - "matlab-numeric/**"
+      - "sr-training/**"
+      - "tests/**"
+      - "tools/**"
+      - ".yurika-test-candidate*.json"
+      - ".github/workflows/audio-quality.yml"
 
 jobs:
   quality:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
-
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7
-
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
       - name: Candidate metadata
         shell: bash
         run: |
           if [ -f .yurika-test-candidate.json ]; then
-            echo '### Candidate' >> "$GITHUB_STEP_SUMMARY"
-            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            cat .yurika-test-candidate.json
             cat .yurika-test-candidate.json >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
           fi
-
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.12"
-
-      - uses: actions/setup-node@v5
-        with:
-          node-version: "22"
-
       - name: Python dependencies
-        run: python -m pip install --disable-pip-version-check numpy scipy soundfile pyloudnorm
-
-      - name: Extended benchmark wiring self-test
-        run: python tests/ci_extended_bench_wiring_test.py
-
-      - name: Candidate hard-gate contracts
+        run: python -m pip install --disable-pip-version-check -r tools/requirements-audio-eval.txt
+      - name: Candidate static self-test
+        run: python tests/candidate_static_test.py
+      - name: AI SR workflow wiring self-test
+        run: python tests/ci_ai_sr_wiring_test.py
+      - name: Fine evaluator deterministic self-test
+        run: python tools/audio_quality_eval.py --selftest
+      - name: JavaScript syntax check for managed candidate files
         shell: bash
         run: |
-          python tests/candidate_static_test.py
-          node tests/remote_mobile_contract_test.js
-          node tests/virtual_amp_contract_test.js
-          node tests/stem_amp_runtime_smoke_test.js
-          node tests/concert_hall_contract_test.js
-          node tests/concert_hall_worklet_sim_test.js
-          node tests/r5_reality_contract_test.js
-          node tests/r5_reality_worklet_sim_test.js
-          node tests/spatial_cue_preservation_test.js
-          node tests/adaptive_safety_stability_test.js
-          python tests/integrity_numeric_stability_test.py
-
-      - name: Legacy compatibility advisory
-        continue-on-error: true
-        shell: bash
-        run: |
-          python tests/static_test.py
-          python tests/dependency_audit.py
-          python tests/perspective_simulation.py
-          for f in tests/*.js; do
-            case "$f" in
-              tests/remote_mobile_contract_test.js) continue ;;
-            esac
-            node "$f"
-          done
-
-      - name: Generate deterministic audio stimulus
-        run: python tests/audio_quality/generate_stimulus.py
-
-      - name: Analyzer identity self-test
-        run: python tests/audio_quality/analyzer_selftest.py
-
-      - name: Generate specialized spatial / SonoBus / amp stimuli
-        run: python tests/audio_quality/generate_specialized_stimuli.py
-
-      - name: Specialized analyzer self-test
-        run: |
-          python tests/audio_quality/specialized_analyzer_selftest.py
-          python tests/audio_quality/adaptive_debug_analyzer_selftest.py
-
-      - name: Generate concert hall impulse stimulus
-        run: python tests/audio_quality/generate_hall_stimulus.py
-
-      - name: Generate R5 temporal-microstructure stimulus
-        run: python tests/audio_quality/generate_reality_stimulus.py
-
-      - name: Generate adaptive-control debug stimulus
-        run: python tests/audio_quality/generate_control_debug_stimulus.py
-
+          python - <<'PY2'
+          import json, subprocess
+          from pathlib import Path
+          for rel in json.loads(Path('.yurika-test-candidate-files.json').read_text(encoding='utf-8')):
+              if rel.endswith('.js') and Path(rel).is_file():
+                  subprocess.run(['node','--check',rel],check=True)
+          PY2
+      - name: Generate 96 kHz AI-SR stimuli
+        run: python tests/audio_quality/generate_ai_sr_stimulus.py
       - name: Install Playwright Chromium
         run: |
           npm install --no-save playwright
           npx playwright install --with-deps chromium
-
-      - name: Render actual Web Audio graph
-        run: node tests/audio_quality/run_playwright.mjs
-
-      - name: Analyze audio quality
-        run: python tests/audio_quality/metrics.py
-
-      - name: Render 3D localization, SonoBus and Virtual Amp benches
-        run: node tests/audio_quality/run_specialized_playwright.mjs
-
-      - name: Analyze 3D localization, SonoBus and Virtual Amp benches
-        run: python tests/audio_quality/specialized_metrics.py
-
-      - name: Analyze Concert Hall bench
-        run: python tests/audio_quality/hall_metrics.py
-
-      - name: Analyze R5 Reality Resolution bench
-        run: python tests/audio_quality/reality_metrics.py
-
-      - name: Assert extended R5/Hall artifacts exist
-        run: python tests/audio_quality/assert_extended_artifacts.py
-
-      - name: Render Self-DAP and SonoBus adaptive-control ablations
-        run: node tests/audio_quality/run_adaptive_debug_playwright.mjs
-
-      - name: Analyze Self-DAP and SonoBus adaptive-control ablations
-        run: python tests/audio_quality/adaptive_debug_metrics.py
-
+      - name: Render actual YURIKA 3.7 root extension graph
+        run: xvfb-run -a node tests/audio_quality/run_playwright.mjs
+      - name: Fine-grained BWE + perceptual SR analysis
+        run: python tests/audio_quality/run_fine_reports.py
+      - name: Assert fine artifacts exist
+        shell: bash
+        run: |
+          test -s tests/audio_quality/results/fine-report.md
+          test -s tests/audio_quality/results/lowband-ai40-fine.json
+          test -s tests/audio_quality/results/lowband-ai80-fine.json
+          test -s tests/audio_quality/results/nativehf-ai40-fine.json
       - name: Job summary
         if: always()
         shell: bash
         run: |
-          if [ -f tests/audio_quality/results/report.md ]; then
-            cat tests/audio_quality/results/report.md >> "$GITHUB_STEP_SUMMARY"
+          if [ -f tests/audio_quality/results/fine-report.md ]; then
+            cat tests/audio_quality/results/fine-report.md >> "$GITHUB_STEP_SUMMARY"
           fi
-          if [ -f tests/audio_quality/results/specialized-report.md ]; then
-            echo >> "$GITHUB_STEP_SUMMARY"
-            cat tests/audio_quality/results/specialized-report.md >> "$GITHUB_STEP_SUMMARY"
-          fi
-          if [ -f tests/audio_quality/results/hall-report.md ]; then
-            echo >> "$GITHUB_STEP_SUMMARY"
-            cat tests/audio_quality/results/hall-report.md >> "$GITHUB_STEP_SUMMARY"
-          fi
-          if [ -f tests/audio_quality/results/reality-report.md ]; then
-            echo >> "$GITHUB_STEP_SUMMARY"
-            cat tests/audio_quality/results/reality-report.md >> "$GITHUB_STEP_SUMMARY"
-          fi
-          if [ -f tests/audio_quality/results/adaptive-debug-report.md ]; then
-            echo >> "$GITHUB_STEP_SUMMARY"
-            cat tests/audio_quality/results/adaptive-debug-report.md >> "$GITHUB_STEP_SUMMARY"
-          fi
-          if [ -f tests/audio_quality/results/adaptive-debug-render-failure.json ]; then
-            echo '### Adaptive debug render failure diagnostic' >> "$GITHUB_STEP_SUMMARY"
-            echo '```json' >> "$GITHUB_STEP_SUMMARY"
-            cat tests/audio_quality/results/adaptive-debug-render-failure.json >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-          fi
-          if [ -f tests/audio_quality/results/specialized-render-failure.json ]; then
-            echo '### Specialized render failure diagnostic' >> "$GITHUB_STEP_SUMMARY"
-            echo '```json' >> "$GITHUB_STEP_SUMMARY"
-            cat tests/audio_quality/results/specialized-render-failure.json >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-          fi
-          if [ -f tests/audio_quality/results/render-failure.json ]; then
-            echo '### Render failure diagnostic' >> "$GITHUB_STEP_SUMMARY"
-            echo '```json' >> "$GITHUB_STEP_SUMMARY"
-            cat tests/audio_quality/results/render-failure.json >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-          fi
-
       - name: Upload audio quality artifacts
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: yurika-audio-quality
           path: tests/audio_quality/results/

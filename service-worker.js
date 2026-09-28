@@ -353,7 +353,7 @@ async function getStatus() {
 
 async function propagateCanonicalChange(previous, next, patch, revision) {
   if (!next.enabled) return { ok: true, inactive: true, revision };
-  const hiResChanged = Boolean(previous.hiResMode) !== Boolean(next.hiResMode);
+  const hiResChanged = Boolean(previous.hiResMode) !== Boolean(next.hiResMode) || Boolean(previous.aiHiResEnabled) !== Boolean(next.aiHiResEnabled);
   const remoteLatencyChanged = String(previous.spatialOutputTarget||"local").startsWith("sonobus-") !== String(next.spatialOutputTarget||"local").startsWith("sonobus-");
   if (hiResChanged || remoteLatencyChanged) {
     const st = await getStatus();
@@ -366,6 +366,7 @@ async function propagateCanonicalChange(previous, next, patch, revision) {
     if (Number(st?.sessionCount || 0) > 1) {
       const livePatch = { ...(patch || {}) };
       delete livePatch.hiResMode;
+      delete livePatch.aiHiResEnabled;
       delete livePatch.spatialOutputTarget;
       let response = { ok:true, revision };
       if (Object.keys(livePatch).length) {

@@ -1,0 +1,55 @@
+{
+  "manifest_version": 3,
+  "name": "YURIKA Audio - GIRO MONATIUM 3.5.0 R5 Reality EVAL",
+  "version": "3.5.1",
+  "description": "YURIKA Audio GIRO MONATIUM 3.5.0 EVAL — bounded fifth-order temporal-microstructure R5 Reality Resolution, low-latency 5-stem analysis/recombine, HRTF/Spatial, device-aware Digital Concert Hall, linked-op-amp Class-A model and GitHub Web Audio quality benches.",
+  "minimum_chrome_version": "116",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "tabCapture",
+    "offscreen",
+    "tabs"
+  ],
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "action": {
+    "default_title": "YURIKA Audio - GIRO MONATIUM",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "version_name": "3.5.1 R5 Reality + Concert Hall + Amp/Stem GitHub CI Wired EVAL",
+  "host_permissions": [
+    "https://www.youtube.com/*",
+    "https://youtube.com/*",
+    "https://m.youtube.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.youtube.com/*",
+        "https://youtube.com/*",
+        "https://m.youtube.com/*"
+      ],
+      "js": [
+        "youtube-av-sync.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"
+  }
+}

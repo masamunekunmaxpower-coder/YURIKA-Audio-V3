@@ -111,9 +111,13 @@ class YurikaSparkMonitorProcessor extends AudioWorkletProcessor {
       const rms = Math.sqrt(this.blockSumSq / n);
       const crest = rms > 1e-7 ? this.blockPeak / rms : 0;
       const diffRms = Math.sqrt(this.blockDiffSumSq / n);
+      const derivativeSparsity = diffRms > 1e-9 ? this.blockDiffPeak / diffRms : 0;
       // Isolated one-sample-ish derivative spikes are more splice-like than sustained HF energy.
+      // Gate the detector by peak/RMS sparsity so bright but continuous content does not look
+      // like a discontinuity merely because adjacent samples change quickly.
+      const sparseGate = Math.max(0, Math.min(1, (derivativeSparsity - 2.55) / 2.20));
       const diffExcess = Math.max(0, this.blockDiffPeak - 2.35 * diffRms);
-      const discontinuity = Math.max(0, Math.min(1, diffExcess / Math.max(0.010, rms * 2.8 + 0.004)));
+      const discontinuity = Math.max(0, Math.min(1, (diffExcess / Math.max(0.010, rms * 2.8 + 0.004)) * sparseGate));
       const speechRatio = Math.max(0, Math.min(1, this.blockSpeechSq / Math.max(1e-12, this.blockSumSq)));
       const breathRatio = Math.max(0, Math.min(1, this.blockHighSq / Math.max(1e-12, this.blockSumSq)));
       const speechStability = Math.max(0, Math.min(1, 1 - Math.abs(speechRatio - this.previousSpeechRatio) * 2.2));
@@ -132,6 +136,7 @@ class YurikaSparkMonitorProcessor extends AudioWorkletProcessor {
         breathRatio,
         speechStability,
         zcr,
+        derivativeSparsity,
         frames: this.framesSinceReport
       });
       this.framesSinceReport = 0;

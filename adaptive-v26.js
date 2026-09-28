@@ -14,6 +14,9 @@
     const pulse = clamp(Number(report.pulse) || 0);
     const rms = Math.max(0, Number(report.rms) || 0);
     const crest = Math.max(0, Number(report.crest) || 0);
+    const breath = clamp(Number(report.breathRatio) || 0);
+    const zcr = clamp(Number(report.zcr) || 0);
+    const derivativeSparsity = Math.max(0, Number(report.derivativeSparsity) || 0);
     if (rms < 0.0015 || jump < 0.08 || amount <= 0) return 0;
 
     const jumpScore = clamp((jump - 0.08) / 0.58);
@@ -21,7 +24,13 @@
     // A real percussion transient is usually high-pulse/high-crest and not strongly speech-dominant.
     const genuineTransient = clamp(((pulse - 0.46) / 0.44)) * clamp((crest - 2.5) / 4.5) * (1 - 0.72 * speechScore);
     const sparkPenalty = 1 - 0.60 * pulse;
-    return clamp(amount * jumpScore * (0.28 + 0.72 * speechScore) * sparkPenalty * (1 - 0.90 * genuineTransient));
+    // Sustained high-frequency material (cymbals, sibilance, bright synths) naturally has a
+    // large sample derivative. A real splice/click is much sparser, so require derivative
+    // sparsity and suppress the confidence when HF/ZCR stay high across the report window.
+    const sparseGate = derivativeSparsity > 0 ? clamp((derivativeSparsity - 2.55) / 2.20) : 1;
+    const hfTexture = clamp((breath - 0.28) / 0.52) * clamp((zcr - 0.10) / 0.28);
+    const hfPenalty = 1 - 0.82 * hfTexture;
+    return clamp(amount * jumpScore * (0.28 + 0.72 * speechScore) * sparkPenalty * (1 - 0.90 * genuineTransient) * sparseGate * hfPenalty);
   }
 
   function deriveValleyProfile(settings = {}, pulse = 0, pressure = 0) {

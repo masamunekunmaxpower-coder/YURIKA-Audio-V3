@@ -22,7 +22,9 @@ class YurikaR5RealityResolutionProcessor extends AudioWorkletProcessor {
     this.port.onmessage = (event) => {
       const d = event?.data || {};
       if (d.type !== "config") return;
-      this.enabled = d.enabled === true;
+      const nextEnabled = d.enabled === true;
+      if (this.enabled && !nextEnabled) this._resetState();
+      this.enabled = nextEnabled;
       this.amount = Math.max(0, Math.min(1, Number(d.amount ?? this.amount) || 0));
       this.mode = ["auto","voice","full"].includes(d.mode) ? d.mode : "auto";
       if (Number.isFinite(Number(d.reportEveryBlocks))) this.reportEveryBlocks = Math.max(8, Math.min(256, Number(d.reportEveryBlocks)|0));
@@ -31,12 +33,30 @@ class YurikaR5RealityResolutionProcessor extends AudioWorkletProcessor {
 
   _bounded(v, scale=1) { return Math.tanh(v * scale); }
 
+  _resetState() {
+    this.prev1[0]=this.prev1[1]=this.prev2[0]=this.prev2[1]=0;
+    this.fastEnv=0; this.slowEnv=0;
+    this.featureEnergy.fill(0); this.interactionEnergy=0; this.injectEnergy=0; this.inputEnergy=0;
+    this.confidenceAccum=0; this.framesAccum=0; this.maxInjection=0; this.reportBlocks=0;
+  }
+
   process(inputs, outputs) {
     const input = inputs[0] || [];
     const output = outputs[0] || [];
     const inL = input[0], inR = input[1] || input[0];
     const outL = output[0], outR = output[1] || output[0];
     const frames = outL?.length || outR?.length || 128;
+    if (!outL && !outR) return true;
+
+    // R5 is a serial insert. Disabled/zero amount must be a minimal transparent copy.
+    if (!this.enabled || this.amount <= 0) {
+      for (let i=0;i<frames;i++) {
+        const l=inL?.[i]||0, r=inR?.[i]??l;
+        if (outL) outL[i]=l;
+        if (outR) outR[i]=r;
+      }
+      return true;
+    }
 
     for (let i=0;i<frames;i++) {
       const l = inL?.[i] || 0;
@@ -73,24 +93,25 @@ class YurikaR5RealityResolutionProcessor extends AudioWorkletProcessor {
       const confidence = Math.min(1, interaction * (0.35 + 0.65*activity) * modeGain);
 
       let injL = 0, injR = 0;
-      if (this.enabled && this.amount > 0) {
-        for (let ch=0; ch<2; ch++) {
-          const s = ch===0 ? l : r;
-          const pred = 1.72*this.prev1[ch] - 0.74*this.prev2[ch];
-          const residual = s - pred;
-          // Injection is bounded to a small fraction of local level. The fifth-order term
-          // gates the residual; it is never used as a raw audio transfer curve.
-          const boundedResidual = Math.tanh(residual / (norm + 0.004)) * norm;
-          const inject = boundedResidual * confidence * this.amount * 0.085;
-          if (ch===0) injL = inject; else injR = inject;
-        }
+      for (let ch=0; ch<2; ch++) {
+        const s = ch===0 ? l : r;
+        const pred = 1.72*this.prev1[ch] - 0.74*this.prev2[ch];
+        const residual = s - pred;
+        // Injection is bounded to a small fraction of local level. The fifth-order term
+        // gates the residual; it is never used as a raw audio transfer curve.
+        const boundedResidual = Math.tanh(residual / (norm + 0.004)) * norm;
+        const inject = boundedResidual * confidence * this.amount * 0.085;
+        if (ch===0) injL = inject; else injR = inject;
       }
       const yl = l + injL, yr = r + injR;
       if (outL) outL[i] = Number.isFinite(yl) ? yl : l;
       if (outR) outR[i] = Number.isFinite(yr) ? yr : r;
 
-      const fs = [v,w,x,y,z];
-      for (let k=0;k<5;k++) this.featureEnergy[k] += fs[k]*fs[k];
+      this.featureEnergy[0] += v*v;
+      this.featureEnergy[1] += w*w;
+      this.featureEnergy[2] += x*x;
+      this.featureEnergy[3] += y*y;
+      this.featureEnergy[4] += z*z;
       this.interactionEnergy += p5*p5;
       this.injectEnergy += injL*injL + injR*injR;
       this.inputEnergy += l*l + r*r;

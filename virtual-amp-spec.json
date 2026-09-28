@@ -1,12 +1,15 @@
 {
-  "id": "yurika-class-a-reference-v1",
-  "modelType": "software reference electrical model",
-  "topology": "Ultra-Clean Class-A / crossover-free",
+  "id": "yurika-class-a-reference-v2",
+  "modelType": "software reference electrical model with linked op-amp servo",
+  "topology": "Ultra-Clean Class-A / crossover-free + bounded op-amp feedback/DC servo",
   "loadOhm": 6,
   "ratedPowerWPerChannel": 8,
   "practicalSimulatedMaxPowerWPerChannel": 12,
   "zeroDbfsReferencePowerWPerChannel": 12,
   "ratedReferenceLevelDbfs": -1.7609,
+  "p1dBReferenceDbfs": -0.75,
+  "p1dBHeadroomExtensionDefaultDb": 12,
+  "p1dBHeadroomExtensionMaxDb": 18,
   "outputImpedanceOhm": 0.02,
   "dampingFactorAt6Ohm": 300,
   "snrDbA": 122,
@@ -14,12 +17,15 @@
   "crosstalkDbAt1k": -120,
   "slewRateEquivalentVPerUs": 25,
   "dcOffsetEquivalentMvMax": 0.2,
-  "frequencyResponse": "inherits YURIKA DSP; amp deviation <= 0.02 dB from 20 Hz to 20 kHz",
+  "opAmpFeedbackDefault": 0.42,
+  "opAmpDcServoHz": 1.5,
+  "frequencyResponse": "inherits YURIKA DSP; amp deviation <= 0.02 dB from 20 Hz to 20 kHz in the reference model",
   "algorithmicLatencyFrames": 0,
-  "enableDisableTransitionMs": 6,
+  "enableDisableTransitionMs": 4,
   "notes": [
-    "Power figures are software reference values and do not mean the PC physically delivers this wattage to a 6-ohm load.",
-    "Amp residual distortion/noise is added to the existing processed signal; combined THD+N is a power-domain composition, not a replacement measurement.",
-    "Neutral (Flat) automatically bypasses amp residuals to preserve the existing transparency gate."
+    "Power and P1dB figures are software-reference/equivalent values and do not mean the PC physically delivers this wattage or has a measured hardware P1dB.",
+    "The headroom extension lowers the internal nonlinear drive and restores unity level after the model, moving the modeled nonlinear onset upward without lookahead.",
+    "The linked op-amp subsystem is a bounded feedback/DC-servo software model, not a model of a named physical op-amp component.",
+    "Runtime power, S/N and THD+N fields are signal-dependent model estimates for diagnostics, not laboratory measurements."
   ]
 }

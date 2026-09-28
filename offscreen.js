@@ -21,6 +21,7 @@ const SpatialDiagnostics = globalThis.YurikaSpatialDiagnostics;
 const ConcertHall = globalThis.YurikaConcertHall;
 const StemSeparator = globalThis.YurikaStemSeparator;
 const RealityResolution = globalThis.YurikaRealityResolution;
+const AiHiRes = globalThis.YurikaAiHiRes;
 const VirtualAmp = globalThis.YurikaVirtualAmp;
 
 let state = freshState();
@@ -33,7 +34,7 @@ function freshState(previousSettings = DEFAULTS, previousRevision = 0) {
     cpuProfile: AdaptiveV28 ? AdaptiveV28.cpuProfile(navigator.hardwareConcurrency || 1) : {name:"balanced",logicalProcessors:navigator.hardwareConcurrency||1,maxSessions:2,spatialReportMs:80}, spatialMetrics:null, spatialLastReportAtMs:0,
     headphoneOutputSinkApplied:false, headphoneOutputSinkError:null, headphoneDetectedLabel:previousSettings.headphoneOutputLabel||"", headphoneCalibrationLastAppliedAtMs:0,
     headphoneEffectiveMode:false, hrtfEffectiveActive:false, hrtfEffectiveProfile:null,
-    spatialResolved:null, spatialParams:null, spatialFallbackStatus:"none", spatialLastAdaptiveApplyMs:0,
+    spatialResolved:null, spatialParams:null, spatialFallbackStatus:"none", spatialLastAdaptiveApplyMs:0, reflectionLastAdaptiveApplyMs:0,
     spatialDeviceListener:null, spatialSinkListener:null, spatialSinkApplied:false, spatialSinkError:null, spatialRuntimeOutputLabel:previousSettings.spatialOutputLabel||"",
     contextLatencyPolicy:"uninitialized",
     videoTelemetry:{}, avSyncEstimatedAudioLatencyMs:null, avSyncBaseLatencyMs:null, avSyncAppliedDelayMs:0,
@@ -46,9 +47,10 @@ function freshState(previousSettings = DEFAULTS, previousRevision = 0) {
     selfDapMonitorTimer: null, selfDapBands: null, selfDapFreqData: null,
     sceneMonitorTimer: null, sceneFreqData: null, sceneTimeData: null, sceneRuntime: null, sceneLastTickMs: 0,
     sparkPulse: 0, sparkRawPulse: 0, sparkLastReportAtMs: 0, sparkReports: 0, sparkFallbackActive: false,
+    fastMonitorSilenceArmed: true, fastMonitorSilenceSinceMs: 0, onsetGraceUntilMs: 0,
     sparkLastAppliedPulse: 0, sparkLastAppliedAtMs: 0, impactGain: 0, compressorEscape: 0,
-    sparkPeak: 0, sparkRms: 0, sparkCrest: 0, seamDiscontinuity: 0, seamSpeechRatio: 0, seamConfidence: 0, seamEvents: 0,
-    voiceConfidence: 0, voiceConfidenceRaw:0, voiceSyntheticTendency: 0, voiceSyntheticTendencyRaw:0, voiceEvents: 0, voiceLastActive:false, voiceLastReportAtMs:0,
+    sparkPeak: 0, sparkRms: 0, sparkCrest: 0, seamDiscontinuity: 0, seamSpeechRatio: 0, seamConfidence: 0, seamEvents: 0, seamLastAppliedAtMs:0,
+    voiceConfidence: 0, voiceConfidenceRaw:0, voiceSyntheticTendency: 0, voiceSyntheticTendencyRaw:0, voiceEvents: 0, voiceLastActive:false, voiceLastReportAtMs:0, voiceLastAppliedAtMs:0,
     hrtfCueHistory:[],
     transientEdgeWet:0, transientEdgeTriggers:0, transientEdgeLastTriggerAtMs:0, transientEdgeLastPulse:0,
     transientValleyDepthDb: 0, transientValleyTriggers: 0, transientValleyLastTriggerAtMs: 0, transientValleyLastPulse: 0,
@@ -69,10 +71,19 @@ function createFilter(ctx, type, frequency, gain = 0, q = 0.7) {
   return node;
 }
 
-function smooth(param, value, now, seconds = 0.05) {
+const LAST_SMOOTH_TARGET = new WeakMap();
+function smooth(param, value, now, seconds = 0.05, epsilon = 1e-5) {
+  if (!param) return;
+  const target = Number(value);
+  if (!Number.isFinite(target)) return;
+  const last = LAST_SMOOTH_TARGET.get(param);
+  // Most adaptive callbacks repeat the same targets many times per second. Do not cancel
+  // and rebuild an already-valid AudioParam ramp unless the target actually changed.
+  if (Number.isFinite(last) && Math.abs(last - target) <= Math.max(epsilon, Math.abs(target) * 1e-5)) return;
+  LAST_SMOOTH_TARGET.set(param, target);
   param.cancelScheduledValues(now);
   param.setValueAtTime(param.value, now);
-  param.linearRampToValueAtTime(value, now + seconds);
+  param.linearRampToValueAtTime(target, now + seconds);
 }
 
 async function createNoiseNode(ctx) {
@@ -90,8 +101,12 @@ async function createSafetyMeterNode(ctx) {
     const node = new AudioWorkletNode(ctx, "yurika-safety-meter");
     node.port.onmessage = (event) => {
       const data = event?.data;
-      if (!data || data.type !== "stats") return;
-      handleSafetyStats(data);
+      if (!data) return;
+      if (data.type === "fault") {
+        latchSafetyBypass();
+        return;
+      }
+      if (data.type === "stats") handleSafetyStats(data);
     };
     return { node, available: true };
   } catch {
@@ -377,19 +392,25 @@ async function createContext(settings) {
     try { ctx = new AudioContext({ latencyHint:"interactive", sampleRate:48000 }); }
     catch { try { ctx = new AudioContext({ latencyHint:"interactive" }); } catch {} }
   }
-  if(!ctx && localHeadphone && settings.hiResMode){
-    state.contextLatencyPolicy="interactive-headphone-hires";
+  const wantsHiRes=Boolean(settings.hiResMode || settings.aiHiResEnabled);
+  if(!ctx && settings.aiHiResEnabled){
+    state.contextLatencyPolicy="interactive-ai-hires-96k";
     try { ctx = new AudioContext({ latencyHint:"interactive", sampleRate:96000 }); }
-    catch { try { ctx = new AudioContext({ latencyHint:"interactive" }); } catch {} }
+    catch { try { ctx = new AudioContext({ latencyHint:"balanced", sampleRate:96000 }); } catch { try { ctx = new AudioContext({ latencyHint:"interactive" }); } catch {} } }
+  }
+  if(!ctx && localHeadphone && settings.hiResMode){
+    state.contextLatencyPolicy="balanced-headphone-hires";
+    try { ctx = new AudioContext({ latencyHint:"balanced", sampleRate:96000 }); }
+    catch { try { ctx = new AudioContext({ latencyHint:"balanced" }); } catch {} }
   }
   if(!ctx && localHeadphone){
     state.contextLatencyPolicy="interactive-headphone";
     try { ctx = new AudioContext({ latencyHint:"interactive" }); } catch {}
   }
-  if (!ctx && settings.hiResMode) {
-    state.contextLatencyPolicy="interactive-hires";
-    try { ctx = new AudioContext({ latencyHint:"interactive", sampleRate:96000 }); }
-    catch { try { ctx = new AudioContext({ latencyHint:"interactive" }); } catch {} }
+  if (!ctx && wantsHiRes) {
+    state.contextLatencyPolicy="balanced-hires";
+    try { ctx = new AudioContext({ latencyHint:"balanced", sampleRate:96000 }); }
+    catch { try { ctx = new AudioContext({ latencyHint:"balanced" }); } catch {} }
   }
   if(!ctx){ state.contextLatencyPolicy="interactive-default"; try { ctx=new AudioContext({ latencyHint:"interactive" }); } catch { state.contextLatencyPolicy="playback-fallback"; ctx=new AudioContext({ latencyHint:"playback" }); } }
   state.headphoneOutputSinkApplied=false; state.headphoneOutputSinkError=null;
@@ -418,10 +439,25 @@ function handleSparkReport(raw) {
   state.sparkFallbackActive = false;
   if (!state.context || !state.nodes) return;
 
-  applySeamNaturalizer(raw);
-  applyVoiceMaterial(raw);
-  scheduleTransientValley(state.sparkPulse);
-  scheduleTransientEdge(raw);
+  // Detect a genuine media onset after a short silence and protect the first attack from
+  // seam/transient repair. This covers YouTube/video starts without disabling the tools later.
+  const audible = state.sparkRms >= 0.0022 || state.sparkPeak >= 0.010;
+  if (!audible) {
+    if (!state.fastMonitorSilenceSinceMs) state.fastMonitorSilenceSinceMs = nowMs;
+    if (nowMs - state.fastMonitorSilenceSinceMs >= 120) state.fastMonitorSilenceArmed = true;
+  } else {
+    if (state.fastMonitorSilenceArmed) state.onsetGraceUntilMs = Math.max(state.onsetGraceUntilMs, nowMs + 140);
+    state.fastMonitorSilenceArmed = false;
+    state.fastMonitorSilenceSinceMs = 0;
+  }
+  const onsetGrace = nowMs < state.onsetGraceUntilMs;
+
+  if (!onsetGrace && state.settings.seamNaturalizerEnabled && (nowMs-state.seamLastAppliedAtMs>=16 || state.seamLastAppliedAtMs===0)) {
+    state.seamLastAppliedAtMs=nowMs; applySeamNaturalizer(raw);
+  } else if (onsetGrace && state.seamConfidence > 0) resetSeamNaturalizer(0.035);
+  if (state.settings.voiceMaterialEnabled) applyVoiceMaterial(raw);
+  if (!onsetGrace && state.settings.transientValleyEnabled) scheduleTransientValley(raw);
+  if (!onsetGrace && state.settings.transientEdgeEnabled) scheduleTransientEdge(raw);
 
   if (!state.settings.sparkEnabled || state.orbitDegraded || !state.sceneRuntime || !SceneEngine) return;
   const delta = Math.abs(state.sparkPulse - state.sparkLastAppliedPulse);
@@ -442,12 +478,12 @@ function linearToDb(value) {
 
 
 function fastMonitorNeeded(settings = state.settings) {
-  return Boolean(settings.sparkEnabled || settings.seamNaturalizerEnabled || settings.transientValleyEnabled || settings.transientEdgeEnabled || settings.voiceMaterialEnabled);
+  return Boolean(settings.sparkEnabled || settings.seamNaturalizerEnabled || settings.transientValleyEnabled || settings.transientEdgeEnabled || settings.voiceMaterialEnabled || settings.reflectionCharacterEnabled);
 }
 
 function resetSeamNaturalizer(seconds = 0.10) {
   const ctx = state.context, nodes = state.nodes;
-  state.seamConfidence = 0;
+  state.seamConfidence = 0; state.seamLastAppliedAtMs = 0;
   if (!ctx || !nodes?.clarity) return;
   smooth(nodes.clarity.gain, state.settings.clarityDb, ctx.currentTime, Math.max(0.03, seconds));
 }
@@ -474,11 +510,16 @@ function resetTransientValley(seconds = 0.08) {
   node.gain.linearRampToValueAtTime(1, ctx.currentTime + Math.max(0.01, seconds));
 }
 
-function scheduleTransientValley(pulse) {
+function scheduleTransientValley(report) {
   const ctx = state.context, node = state.nodes?.transientValley;
   if (!AdaptiveV26 || !ctx || !node || state.orbitDegraded || state.seamConfidence > 0.38) return;
   const nowMs = Date.now();
-  const p = Math.max(0, Math.min(1, Number(pulse) || 0));
+  const raw = report && typeof report === "object" ? report : { pulse: report };
+  const p = Math.max(0, Math.min(1, Number(raw.pulse) || 0));
+  // Bright sustained material is a poor target for a broadband valley. Keep cymbals,
+  // sibilance and high-register synths from being interpreted as an attack that must be ducked.
+  const hfTexture = Math.max(0,Math.min(1,(Number(raw.breathRatio)||0))) * Math.max(0,Math.min(1,(Number(raw.zcr)||0)*3.0));
+  if (hfTexture > 0.42 && Number(raw.derivativeSparsity||0) < 4.2) { state.transientValleyLastPulse = p; return; }
   const rising = p >= 0.36 && (state.transientValleyLastPulse < 0.30 || p - state.transientValleyLastPulse >= 0.18);
   state.transientValleyLastPulse = p;
   if (!rising || nowMs - state.transientValleyLastTriggerAtMs < 58) return;
@@ -498,13 +539,13 @@ function scheduleTransientValley(pulse) {
 
 
 function resetVoiceMaterial(seconds = 0.10) {
-  state.voiceConfidence=0; state.voiceConfidenceRaw=0; state.voiceSyntheticTendency=0; state.voiceSyntheticTendencyRaw=0; state.voiceLastActive=false; state.voiceLastReportAtMs=0;
+  state.voiceConfidence=0; state.voiceConfidenceRaw=0; state.voiceSyntheticTendency=0; state.voiceSyntheticTendencyRaw=0; state.voiceLastActive=false; state.voiceLastReportAtMs=0; state.voiceLastAppliedAtMs=0;
   const ctx=state.context, v=state.nodes?.voiceMaterial; if(!ctx||!v) return;
   for(const [param,val] of [[v.body.gain,0],[v.mud.gain,0],[v.presence.gain,0],[v.air.gain,0],[v.reflectionGain.gain,0]]) smooth(param,val,ctx.currentTime,seconds);
 }
 
 function applyVoiceMaterial(raw) {
-  if(!AdaptiveV27 || !state.context || !state.nodes?.voiceMaterial) return;
+  if(!AdaptiveV27 || !state.context || !state.nodes?.voiceMaterial || !state.settings.voiceMaterialEnabled || state.orbitDegraded) return;
   const v=AdaptiveV27.deriveVoiceMaterial(raw,state.settings);
   const ctx=state.context, n=state.nodes.voiceMaterial;
   if(v.active && !state.voiceLastActive) state.voiceEvents++;
@@ -532,12 +573,14 @@ function applyVoiceMaterial(raw) {
     state.voiceSyntheticTendency=follow(state.voiceSyntheticTendency,v.syntheticTendency,.060,.460);
   }
 
-  const disabled=state.orbitDegraded || !state.settings.voiceMaterialEnabled;
-  smooth(n.body.gain,disabled?0:v.bodyDb,ctx.currentTime,0.045);
-  smooth(n.mud.gain,disabled?0:v.mudDb,ctx.currentTime,0.055);
-  smooth(n.presence.gain,disabled?0:v.presenceDb,ctx.currentTime,0.040);
-  smooth(n.air.gain,disabled?0:v.airDb,ctx.currentTime,0.065);
-  smooth(n.reflectionGain.gain,disabled?0:v.reflectionWet,ctx.currentTime,0.075);
+  const disabled=false;
+  if(state.voiceLastAppliedAtMs && nowMs-state.voiceLastAppliedAtMs<24)return;
+  state.voiceLastAppliedAtMs=nowMs;
+  smooth(n.body.gain,disabled?0:v.bodyDb,ctx.currentTime,0.045,0.006);
+  smooth(n.mud.gain,disabled?0:v.mudDb,ctx.currentTime,0.055,0.006);
+  smooth(n.presence.gain,disabled?0:v.presenceDb,ctx.currentTime,0.040,0.006);
+  smooth(n.air.gain,disabled?0:v.airDb,ctx.currentTime,0.065,0.006);
+  smooth(n.reflectionGain.gain,disabled?0:v.reflectionWet,ctx.currentTime,0.075,0.0005);
 }
 
 function resetTransientEdge(seconds=0.04){
@@ -577,7 +620,7 @@ function applyHrtfAndHeadphone(next, initial=false, previous=null){
   const profile=HeadphoneProfiles.getProfile(next.headphoneModel); const strength=next.headphoneCorrectionEnabled&&localHeadphoneMode?Math.max(0,Math.min(1,next.headphoneCorrectionStrength/100)):0;
   smooth(c.pre.gain,dbToGain(profile.preampDb*strength),ctx.currentTime,initial?0.08:0.18);
   for(let i=0;i<c.filters.length;i++){ const f=c.filters[i],spec=profile.filters[i]||{type:"peaking",frequency:1000,gain:0,q:0.7}; f.type=spec.type; smooth(f.frequency,Math.min(spec.frequency,ctx.sampleRate*0.44),ctx.currentTime,0.15); const q=(spec.type==="lowpass"||spec.type==="highpass")?webAudioResonanceDb(spec.q):spec.q; smooth(f.Q,q,ctx.currentTime,0.15); smooth(f.gain,(spec.gain||0)*strength,ctx.currentTime,0.18); }
-  const calEnabled=Boolean(next.headphoneCalibrationEnabled&&localHeadphoneMode&&AdaptiveV29); const calStrength=calEnabled?Math.max(0,Math.min(1,next.headphoneCalibrationStrength/100)):0;
+  const calEnabled=Boolean(next.headphoneCalibrationEnabled&&next.headphoneCalibrationMode==="measurement"&&localHeadphoneMode&&AdaptiveV29); const calStrength=calEnabled?Math.max(0,Math.min(1,next.headphoneCalibrationStrength/100)):0;
   const cal=AdaptiveV29?.safeCalibrationArray(next.headphoneCalibrationGainsDb)||Array(8).fill(0); const preDb=calEnabled?AdaptiveV29.calibrationPrecutDb(cal,next.headphoneCalibrationStrength):0;
   if(c.calPre)smooth(c.calPre.gain,dbToGain(preDb),ctx.currentTime,initial?0.08:0.18);
   for(let i=0;i<(c.calibrationFilters||[]).length;i++){const f=c.calibrationFilters[i],hz=AdaptiveV29.CALIBRATION_FREQUENCIES[i];f.type="peaking";smooth(f.frequency,Math.min(hz,ctx.sampleRate*0.44),ctx.currentTime,0.12);smooth(f.Q,0.95,ctx.currentTime,0.12);smooth(f.gain,(cal[i]||0)*calStrength,ctx.currentTime,0.18);}
@@ -756,6 +799,16 @@ function applyAvSync(){
   state.avSyncEstimatedAudioLatencyMs=(base+effectiveSec)*1000;
 }
 
+function latchSafetyBypass() {
+  if (state.safetyFaultLatched || !state.context || !state.nodes?.masterSafety) return;
+  state.safetyFaultLatched = true;
+  state.safetyStableReports = 0;
+  const now = state.context.currentTime;
+  // A malformed DSP sample should fall back to clean captured audio, not silence the listener.
+  smooth(state.nodes.masterSafety.gain, 0, now, 0.012);
+  if (state.nodes.safetyBypass) smooth(state.nodes.safetyBypass.gain, 1, now, 0.012);
+}
+
 function handleSafetyStats(raw) {
   const stats = {
     peak: Math.max(0, Number(raw.peak) || 0),
@@ -780,17 +833,16 @@ function handleSafetyStats(raw) {
   if (stats.nonFiniteCount > 0) {
     state.safetyFaults += stats.nonFiniteCount;
     state.safetyStableReports = 0;
-    if (stats.nonFiniteCount >= 4 && !state.safetyFaultLatched && state.context && state.nodes?.masterSafety) {
-      state.safetyFaultLatched = true;
-      smooth(state.nodes.masterSafety.gain, 0, state.context.currentTime, 0.012);
-    }
+    if (stats.nonFiniteCount >= 4) latchSafetyBypass();
   } else if (state.safetyFaultLatched) {
     state.safetyStableReports++;
     if (state.safetyStableReports >= 8 && state.context && state.nodes?.masterSafety) {
       state.safetyFaultLatched = false;
       state.safetyStableReports = 0;
       state.runtimeRecoveries++;
-      smooth(state.nodes.masterSafety.gain, 1, state.context.currentTime, 0.20);
+      const now = state.context.currentTime;
+      smooth(state.nodes.masterSafety.gain, 1, now, 0.20);
+      if (state.nodes.safetyBypass) smooth(state.nodes.safetyBypass.gain, 0, now, 0.20);
     }
   }
 }
@@ -929,7 +981,7 @@ function stopSceneMonitor() {
 }
 
 function sceneRuntimeNeeded(settings = state.settings) {
-  return Boolean(SceneEngine && (settings.sceneEnabled || settings.sparkEnabled || settings.multiSpeakerEnabled || settings.deviceProfile !== "stereo"));
+  return Boolean(SceneEngine && (settings.sceneEnabled || settings.sparkEnabled || settings.multiSpeakerEnabled || settings.spatialEnabled || settings.reflectionCharacterEnabled || settings.deviceProfile !== "stereo"));
 }
 
 function currentFastSparkPulse() {
@@ -1066,6 +1118,19 @@ function sceneTick() {
     const fastDelta = SceneEngine.deriveFastSparkDelta(state.settings, effectivePulse);
     state.sceneRuntime.fastSpark = fastDelta;
     applyFastSparkControls(state.sceneRuntime.controls, fastDelta);
+  }
+
+  // Scene-aware spatial/reflection parameters were previously calculated only when settings
+  // changed. Re-apply at a deliberately low rate so the adaptive fields actually follow audio
+  // without turning the 50 ms monitor into an AudioParam scheduling storm.
+  const wallNowMs = Date.now();
+  if (state.settings.spatialEnabled && wallNowMs - state.spatialLastAdaptiveApplyMs >= 180) {
+    state.spatialLastAdaptiveApplyMs = wallNowMs;
+    applySpatialLayer(false, state.settings);
+  }
+  if (state.settings.reflectionCharacterEnabled && wallNowMs - state.reflectionLastAdaptiveApplyMs >= 120) {
+    state.reflectionLastAdaptiveApplyMs = wallNowMs;
+    applyReflectionCharacter({ pulse:state.sparkPulse, speechRatio:state.seamSpeechRatio });
   }
 }
 
@@ -1298,7 +1363,7 @@ function applySettings(raw, { initial = false, revision = 0, replace = false } =
   if (!initial && state.djAutoMixActive && raw && Object.prototype.hasOwnProperty.call(raw, "djCrossfader")) stopDjAutoMix();
   const candidate = replace ? raw : { ...previous, ...(raw || {}) };
   const next = sanitizeSettings(candidate);
-  const restartRequired = Boolean(state.context && next.hiResMode !== previous.hiResMode);
+  const restartRequired = Boolean(state.context && (next.hiResMode !== previous.hiResMode || next.aiHiResEnabled !== previous.aiHiResEnabled));
   state.settings = next;
   if (rev > 0) state.lastSettingsRevision = Math.max(state.lastSettingsRevision, rev);
   const { context: ctx, nodes } = state;
@@ -1412,6 +1477,7 @@ function applySettings(raw, { initial = false, revision = 0, replace = false } =
   applyHrtfAndHeadphone(next, initial, previous);
   void applyOutputSink(next, previous, initial);
   applySpatialLayer(initial, previous);
+  if (nodes.aiHiRes && AiHiRes?.apply) AiHiRes.apply(nodes.aiHiRes, next);
   if (nodes.stemSeparator && StemSeparator?.apply) StemSeparator.apply(nodes.stemSeparator, next);
   if (nodes.realityResolution && RealityResolution?.apply) RealityResolution.apply(nodes.realityResolution, next);
   if (nodes.concertHall && ConcertHall?.apply) ConcertHall.apply(nodes.concertHall, next, state.spatialResolved, {initial});
@@ -1495,20 +1561,30 @@ async function start({ tabId, streamId, settings, revision = 0, deck = "A", medi
   await stop();
   state.settings = sanitizeSettings({ ...settings, enabled: true });
   if (Number.isFinite(Number(revision)) && Number(revision) > 0) state.lastSettingsRevision = Math.max(state.lastSettingsRevision, Number(revision));
-  state.requestedHiRes = state.settings.hiResMode;
+  state.requestedHiRes = Boolean(state.settings.hiResMode || state.settings.aiHiResEnabled);
 
   let acquiredStream = null, acquiredContext = null;
   try {
+    // Prepare the render context before consuming tabCapture. Once getUserMedia resolves for
+    // a captured tab Chrome can stop the tab's normal audio route, so every millisecond after
+    // that point matters for seamless hand-off.
+    const ctx = acquiredContext = await createContext(state.settings);
+    // Resume before consuming tabCapture when Chrome permits it. If autoplay policy keeps the
+    // context suspended, retry immediately after the MediaStream arrives.
+    if (ctx.state !== "running") { try { await ctx.resume(); } catch {} }
     const stream = acquiredStream = mediaStream || await navigator.mediaDevices.getUserMedia({
       audio: { mandatory: { chromeMediaSource: "tab", chromeMediaSourceId: streamId } },
       video: false
     });
     const audioTrack = stream.getAudioTracks()[0];
     const channelCount = Number(audioTrack?.getSettings?.().channelCount) || 2;
-    const ctx = acquiredContext = await createContext(state.settings);
     if (ctx.state !== "running") await ctx.resume();
 
     const source = ctx.createMediaStreamSource(stream);
+    // tabCapture silences the tab's normal output as soon as the MediaStream is consumed.
+    // Keep a temporary direct lane alive while the worklets/WASM/DSP graph are constructed.
+    const bootstrapGain = ctx.createGain(); bootstrapGain.gain.value = inputMode === "tab" ? 1 : 0;
+    if (inputMode === "tab") { source.connect(bootstrapGain); bootstrapGain.connect(ctx.destination); }
     const inputBus = ctx.createGain();
     if (inputMode === "tab") {
       const branch=AudioModules.createSessionBranch(ctx,source,inputBus);
@@ -1518,7 +1594,10 @@ async function start({ tabId, streamId, settings, revision = 0, deck = "A", medi
       state.deckNodes[safeDeck] = deckBranch;
       if (inputMode === "external") state.streams.external = stream; else { state.streams[safeDeck] = stream; state.deckTabIds[safeDeck] = tabId; }
     }
-    const cartridge = AudioModules.createCartridgeStage(ctx, inputBus);
+    const aiHiRes = AiHiRes?.createStage
+      ? await AiHiRes.createStage(ctx, inputBus, channelCount, state.settings)
+      : (() => { const bypass=ctx.createGain(); inputBus.connect(bypass); return {output:bypass,stage:{available:false,backend:"bypass",error:"ai-hires-module-unavailable",enabled:Boolean(state.settings.aiHiResEnabled)}}; })();
+    const cartridge = AudioModules.createCartridgeStage(ctx, aiHiRes.output);
     const noise = await createNoiseNode(ctx);
     const lowCut = createFilter(ctx, "highpass", 35, 0, 0.7);
     const lowCutBypass = ctx.createGain(); lowCutBypass.gain.value = 1;
@@ -1619,6 +1698,8 @@ async function start({ tabId, streamId, settings, revision = 0, deck = "A", medi
     const limiter = ctx.createDynamicsCompressor();
     const safetyMeter = await createSafetyMeterNode(ctx);
     const masterSafety = ctx.createGain(); masterSafety.gain.value = 0;
+    const safetyBypass = ctx.createGain(); safetyBypass.gain.value = 0;
+    const finalSafetySum = ctx.createGain();
     headphoneCorrection.output.connect(compressorBypass); compressorBypass.connect(compressorSum);
     headphoneCorrection.output.connect(compressor); compressor.connect(compressorProcessed); compressorProcessed.connect(compressorSum);
     compressorSum.connect(output);
@@ -1626,22 +1707,22 @@ async function start({ tabId, streamId, settings, revision = 0, deck = "A", medi
     headphoneCorrection.output.connect(edgeAccentBand); edgeAccentBand.connect(edgeAccentShaper); edgeAccentShaper.connect(edgeAccentGain); edgeAccentGain.connect(output);
     reflectionCharacter.output.connect(output);
     output.connect(transientValley);
-    transientValley.connect(sharedAnalyser); transientValley.connect(sparkMonitor.node); concertHall.output.connect(autoLevel); autoLevel.connect(adaptiveTrim); virtualAmp.output.connect(limiter); limiter.connect(safetyMeter.node); safetyMeter.node.connect(masterSafety); const avSync=createAvSyncStage(ctx,masterSafety); avSync.output.connect(ctx.destination);
+    transientValley.connect(sharedAnalyser); transientValley.connect(sparkMonitor.node); concertHall.output.connect(autoLevel); autoLevel.connect(adaptiveTrim); virtualAmp.output.connect(limiter); limiter.connect(safetyMeter.node); safetyMeter.node.connect(masterSafety); masterSafety.connect(finalSafetySum); inputBus.connect(safetyBypass); safetyBypass.connect(finalSafetySum); const avSync=createAvSyncStage(ctx,finalSafetySum); avSync.output.connect(ctx.destination);
 
     state.tabId = tabId; state.stream = stream; state.context = ctx; state.source = source; state.inputMode = inputMode; state.externalActive = inputMode === "external";
     state.nodes = {
-      inputBus, cartridge: cartridge.stage, noiseNode: noise.node, lowCut, lowCutBypass, lowCutProcessed, lowCutSum, bass, warmth, clarity, air, fillBody, fillPresence, fillTop,
+      inputBus, aiHiRes: aiHiRes.stage, cartridge: cartridge.stage, noiseNode: noise.node, lowCut, lowCutBypass, lowCutProcessed, lowCutSum, bass, warmth, clarity, air, fillBody, fillPresence, fillTop,
       detailHighpass, detailShaper, detailGain, realityShaper, realityHarmGain, convolver,
       realityReflectionGain, mixBus, stemSeparator:stemSeparator.stage, realityResolution:realityResolution.stage, voiceMaterial: voiceMaterial.stage, selfDap: selfDap.stage, widthMatrix: width.matrix, perspective: perspective.stage,
       dacMatrix: dacMatrix.stage, dapPre, dapLow, dapHigh, dapDirect, dapShaper, dapHarmGain, dapSum, dapCrossfeed: dapCross.matrix,
-      room: room.stage, integrity: integrity.stage, hrtf: hrtf.stage, headphoneCorrection: headphoneCorrection.stage, reflectionCharacter:reflectionCharacter.stage, compressor, compressorBypass, compressorProcessed, compressorSum, impactHighpass, impactLowpass, impactGain, edgeAccentBand, edgeAccentShaper, edgeAccentGain, output, transientValley, spatial3d:spatial3d.stage, concertHall:concertHall.stage, sharedAnalyser, sparkMonitor: sparkMonitor.node, spatialMetrics:spatialMetrics.node, sceneSink, autoLevel, adaptiveTrim, virtualAmp:virtualAmp.stage, limiter, safetyMeter: safetyMeter.node, masterSafety, avSync:avSync.stage
+      room: room.stage, integrity: integrity.stage, hrtf: hrtf.stage, headphoneCorrection: headphoneCorrection.stage, reflectionCharacter:reflectionCharacter.stage, compressor, compressorBypass, compressorProcessed, compressorSum, impactHighpass, impactLowpass, impactGain, edgeAccentBand, edgeAccentShaper, edgeAccentGain, output, transientValley, spatial3d:spatial3d.stage, concertHall:concertHall.stage, sharedAnalyser, sparkMonitor: sparkMonitor.node, spatialMetrics:spatialMetrics.node, sceneSink, autoLevel, adaptiveTrim, virtualAmp:virtualAmp.stage, limiter, safetyMeter: safetyMeter.node, masterSafety, safetyBypass, finalSafetySum, bootstrapGain, avSync:avSync.stage
     };
     state.noiseWorkletAvailable = noise.available;
     state.safetyMeterAvailable = safetyMeter.available;
     state.sparkWorkletAvailable = sparkMonitor.available;
     state.spatialMetricsAvailable = spatialMetrics.available;
     state.inputChannels = channelCount;
-    state.startedAt = Date.now(); state.error = null;
+    state.startedAt = Date.now(); state.onsetGraceUntilMs = state.startedAt + 180; state.error = null;
     installSpatialDeviceMonitoring(ctx);
     applySettings(state.settings, { initial: true, revision: state.lastSettingsRevision, replace: true });
     void handleSpatialDeviceChange("start");
@@ -1649,7 +1730,12 @@ async function start({ tabId, streamId, settings, revision = 0, deck = "A", medi
     startOrbitKeeperMonitor();
     startAutoLevelMonitor();
     startSceneMonitor();
-    smooth(masterSafety.gain, 1, ctx.currentTime, 0.050);
+    const startNow = ctx.currentTime;
+    smooth(masterSafety.gain, 1, startNow, 0.045);
+    if (inputMode === "tab") {
+      smooth(bootstrapGain.gain, 0, startNow, 0.055);
+      setTimeout(() => { try { source.disconnect(bootstrapGain); } catch {} try { bootstrapGain.disconnect(); } catch {} }, 100);
+    }
 
     if (audioTrack) audioTrack.addEventListener("ended", () => {
       if (inputMode === "dj") {
@@ -1857,6 +1943,7 @@ function status() {
     spatial3d: SpatialDiagnostics?.snapshot ? SpatialDiagnostics.snapshot({settings:state.settings,resolved:state.spatialResolved,params:state.spatialParams,runtime:{fallbackStatus:state.spatialFallbackStatus,wetConnected:state.nodes?.spatial3d?.wetConnected,sinkApplied:state.spatialSinkApplied,sinkError:state.spatialSinkError,outputLabel:state.spatialRuntimeOutputLabel},context:state.context,inputChannels:state.inputChannels}) : null,
     concertHall: ConcertHall?.snapshot ? ConcertHall.snapshot(state.nodes?.concertHall) : null,
     realityResolution: RealityResolution?.snapshot ? RealityResolution.snapshot(state.nodes?.realityResolution) : null,
+    aiHiRes: AiHiRes?.snapshot ? AiHiRes.snapshot(state.nodes?.aiHiRes) : null,
     stemSeparation: StemSeparator?.snapshot ? StemSeparator.snapshot(state.nodes?.stemSeparator) : null,
     virtualAmp: VirtualAmp?.snapshot ? VirtualAmp.snapshot(state.nodes?.virtualAmp) : null,
     sparkPulse: Number(state.sparkPulse.toFixed(3)),

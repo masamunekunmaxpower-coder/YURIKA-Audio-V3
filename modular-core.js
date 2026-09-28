@@ -29,16 +29,19 @@
       "ti-slow-inspired": { lowDb:0.10, presenceDb:-0.12, highDb:-0.20, harmonic:0.003, preDb:-0.15, drive:1.04, cutoffHz:19500, q:0.58 }
     };
     if (m !== "fusion") {
-      const p = profiles[m];
+      const p = profiles[m], transparentCutoff=24000, transparentQ=0.707;
       return Object.freeze({ mode:m, strength:t, lowDb:p.lowDb*t, presenceDb:p.presenceDb*t, highDb:p.highDb*t,
-        harmonic:p.harmonic*t, preDb:p.preDb*t, drive:1+(p.drive-1)*t, cutoffHz:p.cutoffHz, q:p.q });
+        harmonic:p.harmonic*t, preDb:p.preDb*t, drive:1+(p.drive-1)*t,
+        cutoffHz:transparentCutoff+(p.cutoffHz-transparentCutoff)*t, q:transparentQ+(p.q-transparentQ)*t });
     }
     const [wa,we,wt] = normalizedWeights(akm,ess,ti);
     const pa = profiles["akm-inspired"], pe = profiles["ess-inspired"], pt = profiles["ti-slow-inspired"];
     const mix = (key) => pa[key]*wa + pe[key]*we + pt[key]*wt;
+    const transparentCutoff=24000, transparentQ=0.707;
     return Object.freeze({ mode:m, strength:t, weights:{akm:wa,ess:we,ti:wt}, lowDb:mix("lowDb")*t,
       presenceDb:mix("presenceDb")*t, highDb:mix("highDb")*t, harmonic:mix("harmonic")*t,
-      preDb:mix("preDb")*t, drive:1+(mix("drive")-1)*t, cutoffHz:mix("cutoffHz"), q:mix("q") });
+      preDb:mix("preDb")*t, drive:1+(mix("drive")-1)*t,
+      cutoffHz:transparentCutoff+(mix("cutoffHz")-transparentCutoff)*t, q:transparentQ+(mix("q")-transparentQ)*t });
   }
 
   function roomProfile(mode, amount = 35) {

@@ -1,0 +1,72 @@
+{
+  "architecture": "linear-9x4-fastsoftmax + linear-9x2-sigmoid",
+  "params": 60,
+  "source": "sr-training/audio_sr_training_data.txt",
+  "rows": 1800,
+  "train": {
+    "strategyRmse": 0.05338262043646323,
+    "strategyMae": 0.04216093868035516,
+    "bweRmse": 0.14556654891008514,
+    "bweMae": 0.11519092570739775,
+    "srRmse": 0.031697546958772076,
+    "srMae": 0.02235757733507635,
+    "count": 1440,
+    "weightSum": 1440
+  },
+  "valid": {
+    "strategyRmse": 0.05708704504970152,
+    "strategyMae": 0.043829038530211334,
+    "bweRmse": 0.14645605077461418,
+    "bweMae": 0.11645836224928474,
+    "srRmse": 0.033596599401113134,
+    "srMae": 0.023064718297974664,
+    "count": 360,
+    "weightSum": 360
+  },
+  "byOrigin": {
+    "paired_synthetic_96to48to96": {
+      "train": {
+        "strategyRmse": 0.04661517220637476,
+        "strategyMae": 0.03811705721641919,
+        "bweRmse": 0.16119626301594175,
+        "bweMae": 0.12902207874016053,
+        "srRmse": 0.022340984137006657,
+        "srMae": 0.018397274424419505,
+        "count": 960,
+        "weightSum": 960
+      },
+      "valid": {
+        "strategyRmse": 0.04709752178813207,
+        "strategyMae": 0.038435433507671674,
+        "bweRmse": 0.1669263835622487,
+        "bweMae": 0.1353867542259069,
+        "srRmse": 0.022015827407500674,
+        "srMae": 0.017935921965677903,
+        "count": 240,
+        "weightSum": 240
+      }
+    },
+    "real_selfsupervised_96to48to96": {
+      "train": {
+        "strategyRmse": 0.06483181267194786,
+        "strategyMae": 0.05024870160822688,
+        "bweRmse": 0.10770510695490357,
+        "bweMae": 0.08752861964187177,
+        "srRmse": 0.044899491146233615,
+        "srMae": 0.03027818315639004,
+        "count": 480,
+        "weightSum": 480
+      },
+      "valid": {
+        "strategyRmse": 0.0730783074540784,
+        "strategyMae": 0.054616248575290745,
+        "bweRmse": 0.09284012800048853,
+        "bweMae": 0.07860157829604034,
+        "srRmse": 0.049160971929803315,
+        "srMae": 0.03332231096256819,
+        "count": 120,
+        "weightSum": 120
+      }
+    }
+  }
+}

@@ -1,3 +1,71 @@
+YURIKA Audio 3.7.0 Bandwidth Extension + Perceptual Super-Resolution
+
+3.7.0 BANDWIDTH / PERCEPTUAL SR UPDATE
+- The AI Hi-Res path is now explicitly designed as causal bandwidth extension (BWE) plus in-band perceptual super-resolution (SR), not generic enhancement.
+- Generated upper-band content is plausible synthesis conditioned by the source; it is not exact restoration of information that was absent from the input.
+- Dart v2.1 micro/local/context hierarchy and Soft Sound Objects route tonal/transient/texture/ambience behavior into the C++/Wasm generator.
+- Controller runtime is fixed-cost: 9 inputs -> 4 strategy outputs + BWE drive + SR drive, 60 coefficients total. The training corpus is never loaded during playback.
+- Offline paired training uses 1,800 text rows: 1,200 procedural 96 kHz truth scenes plus 600 self-supervised rows sampled across the supplied 19m08s 96 kHz FLAC, each degraded through 96 -> 48 -> 96 kHz. Raw user audio is not packaged.
+- Native-hires protection detects existing >24 kHz support and continuously reduces generated BWE to avoid blindly stacking synthetic upper-band energy on real upper-band content.
+- 96 kHz is the primary certified target. The public C++ core is numerically stable at other tested rates, but the Chrome Worklet enables the AI Hi-Res path only from 88.2 to 100 kHz.
+- The signal path remains zero-lookahead. Non-finite sanitization, injection clamps, activity gating, and consecutive-overrun bypass remain active.
+- 45B/model inference was not used to train, build, debug, or validate this release.
+
+See BANDWIDTH_PERCEPTUAL_SR_3.7.0.md and VALIDATION_3.7.0.txt for architecture, measured results, and limitations.
+
+--- Historical release notes below ---
+
+YURIKA Audio 3.6.5 Hierarchy Classifier + Dedicated TXT Controller
+
+3.6.5 HIERARCHY / TRAINING UPDATE
+- Dart detector v2.1 uses rate-aware micro/local/context time scales and soft L1/L2/L3 weights.
+- Dominant classification has margin/streak hysteresis for telemetry; audible C++ processing uses continuous soft weights.
+- C++/Wasm now applies distinct L1 micro, L2 local and L3 context generation profiles.
+- Controller training source is controller-training/controller_training_data.txt. The legacy 3.6.4 JSONL is retained only for provenance.
+- User 96 kHz FLAC contributes pseudo-labeled calibration descriptors; the matching 48 kHz WAV is validation-only to prevent duplicate-content leakage.
+- Raw user audio is not packaged.
+- 45B/model inference was not used in this build or validation.
+- Existing 96 kHz gate, zero-lookahead causal path, non-finite sanitization and repeated-overrun bypass remain.
+
+YURIKA Audio - GIRO MONATIUM 3.5.3
+3.5.3 STABILITY + SIGNAL PATH FIX
+- Startup: temporary clean tab-audio bootstrap lane prevents silence while Worklets/WASM/DSP are constructed.
+- Safety: non-finite faults crossfade to clean captured audio instead of muting the whole output.
+- Hi-Res: 96 kHz contexts request balanced latency to provide more deadline margin.
+- Video onset: 140 ms protection window after silence prevents seam/transient processing from eating the first attack.
+- High-frequency protection: seam/valley detectors distinguish sustained bright material from sparse discontinuities.
+- Adaptive scheduling: redundant AudioParam ramps are suppressed; Voice Material/Seam updates are rate-limited.
+- DAC Matrix: 0% is true bypass; Fusion weight changes rebuild the harmonic curve; cutoff/Q scale with Strength.
+- Room: decaySeconds now changes the generated early-reflection IR; Amount 0 is true bypass.
+- Integrity: Strength now controls a real dry/DC-blocked blend.
+- Spatial: ILD magnitude and profile distanceStrength now affect the DSP; safeHeadroom contributes to output compensation.
+- Scene/Reflection: adaptive Spatial and Reflection Character now update during playback at bounded rates.
+- Headphone calibration: measurement correction only runs when Calibration Mode is measurement.
+- 5-Stem: remains a transparent analysis separator, now default OFF to avoid spending CPU when no stem rebalance is requested.
+Chrome Extension Audio Stability Fix Package
+
+INSTALL
+1. Extract this ZIP completely.
+2. Open chrome://extensions/
+3. Enable Developer mode.
+4. Click Load unpacked.
+5. Select the extracted folder containing manifest.json.
+
+3.5.2 AUDIO STABILITY FIX
+- Concert Hall: disabled state now skips the FDN entirely and clears stale tail state.
+- Concert Hall: removed per-sample sign-array allocations.
+- R5 Reality: disabled/zero-amount state is now a minimal transparent copy; removed per-sample feature-array allocations.
+- 5-Stem: disabled state now bypasses all analysis; enabled state no longer creates nested arrays for every audio sample.
+- Spatial Metrics: correlation diagnostics now use sample-rate-aware <=24 kHz analysis to prevent single-quantum CPU spikes at 48/96 kHz.
+- Spatial Metrics: inactive state no longer fills analysis buffers.
+- Safety Meter: removed render-quantum slice/map/spread allocations.
+- Virtual Amp: fully disabled state skips WASM processing.
+- Audible algorithms/coefficients are otherwise retained; no intentional EQ/tonality change.
+
+--- Original 3.5.1 release notes below ---
+
+--- Historical notes below ---
+
 YURIKA Audio GIRO MONATIUM 3.3.2
 
 3.3.2 Integrity Numeric Stability
@@ -102,3 +170,10 @@ VERSION
 - Prevents GitHub/Chrome startup failure: createNoiseNode is not defined.
 
 3.3.1: Adaptive Safety release is held during active program audio and recovers only in quiet windows to avoid gain-modulation THD+N contamination.
+
+3.6.1 Hierarchical AI Hi-Res note:
+- AI Hi-Res is OFF by default. Enable "Embedded AI Bandwidth Extension" in the popup.
+- v3.6.1 replaces the flat 321-parameter MLP with a 697-parameter causal hierarchy: L1 micro features -> L2 local aggregation -> L3 wider aggregation -> fusion.
+- Enabling/disabling AI Hi-Res restarts the extension audio context because the mode requests 96 kHz / interactive latency.
+- The AI stage is generative bandwidth extension; it is not a guarantee of recovering source data lost before playback.
+
