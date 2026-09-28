@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="560" viewBox="0 0 760 560">
+<defs>
+  <linearGradient id="paper" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fffaf0"/><stop offset="1" stop-color="#f4ead2"/></linearGradient>
+  <linearGradient id="mint" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e6f4e8"/><stop offset="1" stop-color="#c8e4d6"/></linearGradient>
+  <linearGradient id="lilac" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#eee4f6"/><stop offset="1" stop-color="#d7c8ea"/></linearGradient>
+  <filter id="paperWobble" x="-3%" y="-3%" width="106%" height="106%"><feTurbulence baseFrequency="0.008" numOctaves="2" seed="31" result="noise"/><feDisplacementMap in="SourceGraphic" in2="noise" scale="1.25"/></filter>
+  <filter id="shadow" x="-15%" y="-15%" width="130%" height="135%"><feGaussianBlur in="SourceAlpha" stdDeviation="3" result="b"/><feOffset dy="5" result="o"/><feColorMatrix in="o" type="matrix" values="0 0 0 0 .29 0 0 0 0 .25 0 0 0 0 .2 0 0 0 .20 0" result="s"/><feMerge><feMergeNode in="s"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+</defs>
+
+<!-- handmade outer board -->
+<g filter="url(#shadow)">
+  <path d="M29 24Q33 12 48 12L711 13Q731 14 734 31L744 507Q744 529 723 532L43 540Q21 538 20 518L17 49Q18 30 29 24Z" fill="url(#paper)" stroke="#655b52" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+
+<!-- top title cloth -->
+<g filter="url(#paperWobble)" stroke="#685e55" stroke-linejoin="round">
+  <path d="M45 28Q47 15 62 16L318 14Q338 15 343 31L342 84L49 87Q44 65 45 28Z" fill="#fff3d6" stroke-width="4"/>
+  <path d="M57 75q36 12 73 0 39 13 78 0 43 13 83 0 27 9 49 1" fill="none" stroke="#d6bd7f" stroke-width="3" stroke-linecap="round" opacity=".9"/>
+</g>
+
+<!-- tab ribbon backing -->
+<path d="M354 24Q369 14 386 22L705 22Q727 24 728 43L730 98L353 99Z" fill="#e9dfcd" stroke="#685e55" stroke-width="4" stroke-linejoin="round"/>
+<path d="M365 89q38 8 75 0 40 9 81 0 40 10 80 0 41 8 78 0" fill="none" stroke="#cbbda6" stroke-width="3" stroke-linecap="round" opacity=".8"/>
+
+<!-- character field: soft cloth/paper -->
+<g filter="url(#paperWobble)">
+  <path d="M37 111Q40 95 58 95H270Q292 96 291 118L287 513Q286 532 266 534H58Q39 533 38 515Z" fill="#f8f0d7" stroke="#6b6158" stroke-width="4"/>
+  <path d="M50 129Q74 109 96 127T143 126Q166 106 190 127T236 127Q257 109 279 127" fill="none" stroke="#d7c287" stroke-width="4" stroke-linecap="round"/>
+  <path d="M48 483q39 15 77 2 42 14 80 0 37 12 73-2" fill="none" stroke="#bdd8bf" stroke-width="6" stroke-linecap="round" opacity=".95"/>
+</g>
+
+<!-- RIM dock plaque (decorative only) -->
+<g transform="translate(54 410) rotate(-1.5)" stroke="#70645b" stroke-linejoin="round">
+  <path d="M0 8Q2 0 12 0h78q11 0 12 10l1 52q-1 11-12 12H11Q0 73 0 62Z" fill="#e5f0e1" stroke-width="3"/>
+  <g fill="#726b72" stroke-width="1.5">
+    <rect x="12" y="9" width="10" height="6" rx="3"/>
+    <rect x="27" y="9" width="10" height="6" rx="3"/>
+    <rect x="42" y="9" width="10" height="6" rx="3"/>
+    <rect x="12" y="17" width="10" height="6" rx="3"/>
+    <rect x="27" y="17" width="10" height="6" rx="3"/>
+    <rect x="42" y="17" width="10" height="6" rx="3"/>
+    <rect x="12" y="25" width="10" height="6" rx="3"/>
+    <rect x="27" y="25" width="10" height="6" rx="3"/>
+    <rect x="42" y="25" width="10" height="6" rx="3"/>
+    <rect x="12" y="33" width="10" height="6" rx="3"/>
+    <rect x="27" y="33" width="10" height="6" rx="3"/>
+    <rect x="42" y="33" width="10" height="6" rx="3"/>
+    <rect x="12" y="41" width="10" height="6" rx="3"/>
+    <rect x="27" y="41" width="10" height="6" rx="3"/>
+    <rect x="42" y="41" width="10" height="6" rx="3"/>
+    <rect x="12" y="49" width="10" height="6" rx="3"/>
+    <rect x="27" y="49" width="10" height="6" rx="3"/>
+    <rect x="42" y="49" width="10" height="6" rx="3"/>
+    <rect x="12" y="57" width="10" height="6" rx="3"/>
+    <rect x="27" y="57" width="10" height="6" rx="3"/>
+    <rect x="42" y="57" width="10" height="6" rx="3"/>
+  </g>
+  <path d="M61 14q14-8 29 1l-2 44q-11 8-25 0Z" fill="#d8cae8" stroke-width="3"/>
+  <circle cx="75" cy="28" r="6" fill="#f3d475" stroke-width="2.4"/>
+  <path d="M68 48q7-6 14 0" fill="none" stroke-width="2.4" stroke-linecap="round"/>
+</g>
+
+<!-- controls paper -->
+<g filter="url(#paperWobble)">
+  <path d="M307 111Q310 96 329 95H709Q729 96 730 117L727 511Q727 531 708 533H326Q307 531 307 512Z" fill="#fffaf0" stroke="#6b6158" stroke-width="4"/>
+</g>
+
+<!-- monorail-route-like accent, decorative, not HUD -->
+<g fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M333 126c73 25 138-8 211 5s95 28 159 9" stroke="#b4d9ca" stroke-width="9" opacity=".72"/>
+  <path d="M333 126c73 25 138-8 211 5s95 28 159 9" stroke="#6d887f" stroke-width="2.4" opacity=".95"/>
+  <circle cx="390" cy="134" r="7" fill="#f4cf70" stroke="#6b6158" stroke-width="3"/>
+  <circle cx="523" cy="128" r="7" fill="#c8addd" stroke="#6b6158" stroke-width="3"/>
+  <circle cx="648" cy="142" r="7" fill="#91cbc5" stroke="#6b6158" stroke-width="3"/>
+</g>
+
+<!-- small handmade stickers -->
+<g stroke="#6b6158" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M66 100l8-16 10 14 18-3-7 17 12 13-18 2-10 15-8-17-18-5 14-11Z" fill="#f4d16e"/>
+  <path d="M720 481q20-6 23 14-5 19-26 22-16-8-12-24 5-8 15-12Z" fill="#d9c8ea"/>
+  <path d="M720 493q7-9 13 0m-15 10q10 5 18 0" fill="none"/>
+  <path d="M278 531q-8-19 9-25 13 7 9 23-7 10-18 2Z" fill="#c4dfc0"/>
+  <path d="M305 90q7-13 16 0 12-4 13 8-2 11-13 12-10 0-16-9-4-6 0-11Z" fill="#f2bea8"/>
+</g>
+
+<!-- sewing / paper marks -->
+<g fill="none" stroke="#b7a894" stroke-width="2" stroke-linecap="round" opacity=".72">
+  <path d="M307 515q41 8 80 0m260 1q36 7 68-1"/>
+  <path d="M52 103q15-5 29 0m165 0q17-5 31 0"/>
+</g>
+</svg>

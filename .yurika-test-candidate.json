@@ -4,10 +4,10 @@
   "layout": "v3-root",
   "managedFileCount": 134,
   "schema": 1,
-  "sourceZip": "YURIKA-Audio-V3-3.7.0-BWE-SR-FINE-EVAL-GITHUB-READY-FIX5.zip",
+  "sourceZip": "YURIKA-Audio-V3-3.7.0-BWE-SR-FINE-EVAL-GITHUB-READY-FIX6.zip",
   "name": "YURIKA Audio - GIRO MONATIUM 3.7.0 Bandwidth + Perceptual SR Fine EVAL (V3 Root)",
   "appliedAt": "2026-09-29T04:10:00+09:00",
-  "sha256": "68a27a5496681868036f7a4f631c1f4cc8b8d65fa0d5dc1629e8a6f7f6b0ea86",
-  "hashKind": "managed-source-tree-sha256-v1-excludes-candidate-meta",
-  "installerRevision": "1.5-v3-root-layout"
+  "sha256": "53f9b130c0e6baeadb4fda79f76cf31a75fb6c16b223430157008b1d3dd8512d",
+  "hashKind": "managed-source-tree-sha256-v2-git-text-lf-normalized-excludes-candidate-meta",
+  "installerRevision": "1.6-v3-root-git-normalized-hash"
 }

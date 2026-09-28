@@ -1,0 +1,30 @@
+YURIKA Audio 3.5.2 Audio Stability Fix
+
+Primary target: intermittent audio dropouts caused by AudioWorklet deadline pressure.
+
+Changes:
+1. concert-hall-worklet.js
+   - Disabled Hall now outputs zero wet signal immediately instead of running the 8-line FDN on silence.
+   - FDN state resets on disable to avoid stale tail on later enable.
+   - signL/signR moved out of the per-sample loop.
+
+2. stem-separator-worklet.js
+   - Disabled separator uses a transparent effects-stem bypass and skips analysis.
+   - Removed per-sample nested stems arrays; outputs and energy metrics are written directly.
+
+3. reality-resolution-worklet.js
+   - Disabled or amount=0 uses direct transparent copy and skips R5 feature analysis.
+   - Removed per-sample [v,w,x,y,z] allocation.
+
+4. spatial-metrics-worklet.js
+   - Diagnostics are inactive until explicitly enabled.
+   - Correlation analysis is downsampled to <=24 kHz with physical lag timing preserved.
+   - This reduces worst-case work per report substantially, especially at 96 kHz.
+
+5. safety-meter-worklet.js
+   - Removed input.slice(...).map(...) and spread usage from every render quantum.
+
+6. virtual-amp-worklet.js
+   - Fully disabled amp skips WASM buffer copies and processing.
+
+No intentional change to the enabled audible DSP coefficients.

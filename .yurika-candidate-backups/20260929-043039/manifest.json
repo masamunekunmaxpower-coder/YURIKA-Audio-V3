@@ -1,0 +1,55 @@
+{
+  "manifest_version": 3,
+  "name": "YURIKA Audio - GIRO MONATIUM 3.7.0 BANDWIDTH + PERCEPTUAL SR",
+  "version": "3.7.0",
+  "description": "YURIKA Audio 3.7.0: causal bandwidth extension + perceptual super-resolution with paired-audio controller, Dart hierarchy routing, C++/Wasm real-time synthesis, and native-hires protection.",
+  "minimum_chrome_version": "116",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "tabCapture",
+    "offscreen",
+    "tabs"
+  ],
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "action": {
+    "default_title": "YURIKA Audio - GIRO MONATIUM",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "version_name": "3.7.0 Bandwidth Extension + Perceptual SR + Paired Audio Controller",
+  "host_permissions": [
+    "https://www.youtube.com/*",
+    "https://youtube.com/*",
+    "https://m.youtube.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.youtube.com/*",
+        "https://youtube.com/*",
+        "https://m.youtube.com/*"
+      ],
+      "js": [
+        "youtube-av-sync.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"
+  }
+}

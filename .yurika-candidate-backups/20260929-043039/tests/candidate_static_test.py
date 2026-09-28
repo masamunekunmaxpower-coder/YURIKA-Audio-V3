@@ -38,21 +38,12 @@ if files_meta.exists():
         req((ROOT/rel).is_file(),f'managed file missing: {rel}')
     if md:
         req(md.get('managedFileCount')==len(managed),f"managedFileCount mismatch: {md.get('managedFileCount')} != {len(managed)}")
-        # Git normalizes text line endings on commit/checkout. Hash text in canonical LF form
-        # so Windows ZIP/working-tree bytes and Linux Actions checkout produce one stable digest.
-        text_ext={'.json','.txt','.md','.js','.css','.html','.py','.yml','.yaml','.m','.cpp','.h','.dart','.sh','.cmd','.xml','.svg','.webmanifest'}
         h=hashlib.sha256()
         for rel in managed:
             if rel=='.yurika-test-candidate.json': continue
             q=ROOT/rel
             if not q.is_file(): continue
-            data=q.read_bytes()
-            if q.suffix.lower() in text_ext:
-                try:
-                    data=data.decode('utf-8-sig').replace('\r\n','\n').replace('\r','\n').encode('utf-8')
-                except UnicodeDecodeError:
-                    pass
-            h.update(rel.encode('utf-8')); h.update(b'\0'); h.update(hashlib.sha256(data).digest()); h.update(b'\0')
+            h.update(rel.encode('utf-8')); h.update(b'\0'); h.update(hashlib.sha256(q.read_bytes()).digest()); h.update(b'\0')
         req(md.get('sha256')==h.hexdigest(),f"managed tree SHA mismatch: {h.hexdigest()}")
 # Production JavaScript safety scan: repo-root extension files and production subdirs only.
 for p in list(ROOT.glob('*.js')) + list((ROOT/'dart-detector').rglob('*.js')):

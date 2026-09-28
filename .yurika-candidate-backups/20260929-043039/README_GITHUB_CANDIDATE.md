@@ -1,4 +1,4 @@
-# YURIKA Audio 3.7.0 GitHub Candidate - FIX6 V3 Root Layout
+# YURIKA Audio 3.7.0 GitHub Candidate - FIX5 V3 Root Layout
 
 This package now follows the same repository layout as `YURIKA-Audio-V3.zip`: **the repository root itself is the Chrome extension root**.
 

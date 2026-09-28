@@ -19,10 +19,7 @@ for token in [
  'node tests/audio_quality/run_playwright.mjs',
  'python tests/audio_quality/run_fine_reports.py',
  'tests/audio_quality/results/fine-report.md',
- 'actions/checkout@v7',
- 'actions/setup-python@v7',
- 'actions/setup-node@v5',
- 'actions/upload-artifact@v6']:
+ 'actions/upload-artifact@v4']:
     req(token in wf,f'workflow wiring missing: {token}')
 rt=txt('tests/audio_quality/runtime.js')
 req('aiHiResEnabled=true' in rt and 'aiHiResAmount=40' in rt and 'aiHiResAmount=80' in rt,'AI profile wiring missing')

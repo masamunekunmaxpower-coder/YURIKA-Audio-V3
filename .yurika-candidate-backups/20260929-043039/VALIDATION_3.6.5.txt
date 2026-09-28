@@ -1,0 +1,77 @@
+YURIKA Audio 3.6.5 validation summary
+Date: 2026-09-28
+
+BUILD / MODEL USE
+- C++/Wasm build: PASS
+- Node syntax checks: PASS
+- 45B/model inference usage during this rebuild: NONE
+- YURIKA MCP review path used: deterministic CPU only; generative_model_used=false
+
+TRAINING CORPUS
+- Primary training source: controller-training/controller_training_data.txt
+- Total rows: 1184
+- Legacy synthetic rows: 384
+- Real-audio calibration rows: 800 (200 timestamps x 4 soft objects)
+- Real-audio row weight: 0.35
+- Raw user audio packaged: NO
+- 48 kHz WAV used as training: NO (duplicate-content validation only)
+- Controller architecture: 9 -> 4 linear fast-softmax, 40 parameters
+- Validation RMSE: 0.03323584
+- Validation MAE: 0.02354818
+- Real-audio calibration validation RMSE: 0.04306767
+- NOTE: pseudo-target calibration metrics are not evidence of subjective sound quality or source recovery.
+
+USER AUDIO
+- FLAC: 96 kHz, stereo, PCM16, 1148.28 s
+- WAV: 48 kHz, stereo, PCM24, 1148.28 s
+- FLAC downsampled to 48 kHz vs WAV correlation at sampled locations: approximately 0.999999
+- Therefore the files are treated as matching content and not independent training examples.
+- Sampled FLAC FFT energy at/above 24 kHz was extremely small (~1e-9 to 3.3e-8 of total FFT energy in tested 1 s windows); this source does not provide strong independent ultrasonic training evidence.
+
+DART HIERARCHY CLASSIFIER
+- Detector: v2.1, rule-based / non-AI
+- Time constants are derived from frames/sampleRate.
+- Soft hierarchy weights are normalized and smoothed.
+- dominantIndex uses margin + consecutive-candidate hysteresis for telemetry.
+- Same 240 s representative FLAC blocks:
+  old v2.0 dominant share: L1 0.29% / L2 94.72% / L3 4.99%
+  new v2.1 dominant share: L1 12.59% / L2 49.19% / L3 38.22%
+- Synthetic identical-metric 48k/96k timing test: hierarchy weight difference = 0.
+
+C++ HIERARCHY STRATEGIES
+- L1 micro: derivative/transient/texture-biased profile
+- L2 local: harmonic/local-curvature profile
+- L3 context: smoother harmonic/ambience profile
+- Profiles are soft-blended; dominantIndex is not used as a hard audio switch.
+- Same synthetic input, hierarchy-forced delta RMS:
+  L1: 2.02826e-4
+  L2: 1.92571e-4
+  L3: 1.74572e-4
+- The non-identical outputs confirm distinct C++ generation paths.
+
+REAL AUDIO FULL-PIPELINE CHECK
+- Source segment: FLAC 96 kHz stereo, 60-70 s
+- Duration processed: 10.0 s
+- Output non-finite samples: 0
+- Output delta RMS at amount=0.4: 1.64085e-5
+- Output peak: 0.577764
+- Mean hierarchy weights: L1 0.26854 / L2 0.44322 / L3 0.28824
+- Mean controller strategy: harmonic 0.30666 / transient 0.21132 / texture 0.21348 / ambience 0.26853
+- 128-frame C++ process timing in Node/V8: mean 0.1593 ms / p95 0.3882 ms / p99 0.4141 ms / max 2.2110 ms
+- Existing repeated-hard-overrun guard remains active; isolated max is not an end-to-end browser latency guarantee.
+
+BOUNDARY / SAFETY
+- zero input -> zero output: PASS
+- NaN/Infinity input sanitized to finite output: PASS
+- hierarchy exports present: PASS
+- hierarchy profile differentiation: PASS
+- detector hierarchy weights sum to 1: PASS
+- soft object count = 4: PASS
+- 96 kHz high-rate gate preserved in AudioWorklet
+- zero-lookahead causal core preserved
+- missing/faulted Wasm and repeated timing overruns retain bypass behavior
+
+LIMITATIONS
+- The real-audio pseudo-targets are derived from offline descriptors, not human listening labels.
+- One musical program cannot establish universal classifier calibration.
+- Subjective fidelity, restoration quality, and genuine >24 kHz source recovery are not proven by these tests.
