@@ -1,0 +1,32 @@
+YURIKA Audio 3.5.3 - Stability + Signal Path Fix
+
+AUDIO DROPOUT / STARTUP
+1. Added a temporary direct bootstrap lane for tabCapture startup.
+   The captured stream remains audible while AudioWorklet/WASM/DSP nodes are being created,
+   then crossfades to the processed lane.
+2. Safety non-finite handling now crossfades to a clean input bypass instead of muting output.
+3. Hi-Res 96 kHz AudioContext now requests balanced latency rather than interactive latency.
+4. Added an onset grace period after silence/video starts. Seam Naturalizer, Transient Valley,
+   and Transient Edge do not modify the first 140 ms attack.
+5. Spark/seam detection now reports derivative sparsity and suppresses sustained high-frequency
+   textures which previously could resemble discontinuities.
+6. Transient Valley adds a high-frequency texture guard.
+7. Repeated AudioParam scheduling is reduced with target deadband/caching and bounded update rates.
+
+AUDIO QUALITY / SIGNAL PATH
+1. DAC Matrix Strength=0 is a true bypass. Cutoff/Q interpolate with Strength.
+   Fusion AKM/ESS/TI weight changes now rebuild the WaveShaper curve.
+2. Room decaySeconds now modifies the deterministic room IR. Room Amount=0 is true bypass.
+3. Integrity Strength now controls an actual complementary dry/DC-blocked blend.
+4. Spatial profile distanceStrength now scales depth. ILD magnitude is applied as bounded,
+   symmetric side-level contrast rather than an unsafe fixed left/right bias.
+5. Spatial safeHeadroom now contributes to output gain compensation.
+6. Scene -> Spatial and dynamic Reflection Character are periodically re-applied during playback.
+7. Headphone calibration mode is enforced: measurement EQ is active only in measurement mode.
+8. 5-Stem remains transparent by design when recombined. It is default OFF in 3.5.3 to avoid
+   unnecessary realtime cost unless the user explicitly enables stem analysis.
+
+COMPATIBILITY
+- Existing setting keys are preserved.
+- No manifest permissions were added.
+- R5, Concert Hall and Virtual Amp 3.5.2 realtime optimizations are retained.

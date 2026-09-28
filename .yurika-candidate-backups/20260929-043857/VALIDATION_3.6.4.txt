@@ -1,0 +1,23 @@
+YURIKA Audio 3.6.4 validation summary
+
+Controller training data: 384 JSONL rows
+Controller architecture: learned linear 9->4 fast-softmax
+Controller parameters: 40
+Structured holdout: 77 rows
+Holdout RMSE: 0.0159225
+Holdout MAE: 0.0120295
+Holdout dominant-strategy match: 100%
+NOTE: synthetic structured metric, not real-world audio quality.
+
+Controller JS-reference vs C++/Wasm max abs difference: 3.27e-6
+C++/Wasm 96kHz / 128-frame benchmark (Node/V8): mean 0.116 ms, p95 0.156 ms, p99 0.299 ms. Isolated max observed 3.287 ms. The runtime guard requires repeated overruns; this is not an end-to-end browser/device latency guarantee.
+
+Boundary tests: zero -> zero; fullscale finite <= 1; NaN/Infinity sanitized.
+
+User-supplied real validation clip: 48 kHz / 24-bit / mono / 14.236375 s. Resampled to 96 kHz offline for validation only. It was NOT used as training data and is NOT included in this package.
+Real validation object confidence means: tonal 0.8901, transient 0.5036, texture 0.4509, ambience 0.6918.
+Real validation strategy means: harmonic 0.3428, transient 0.1903, texture 0.2035, ambience 0.2633.
+Output delta RMS at amount=0.4: 4.80e-5. Output peak ~0.45482.
+
+Dart Soft Sound Objects are overlapping semantic detections, not hard stems.
+45B model usage: none.

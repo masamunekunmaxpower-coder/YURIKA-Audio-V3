@@ -1,0 +1,18 @@
+{
+  "source": "user FLAC 96kHz/16-bit stereo",
+  "duration_seconds": 1148.28,
+  "sample_points": 200,
+  "rows_added": 800,
+  "wav_role": "validation_only_duplicate_content",
+  "notes": "Pseudo-targets from offline descriptors; not listening-quality ground truth.",
+  "dominant_counts": {
+    "1": 18,
+    "2": 99,
+    "3": 83
+  },
+  "mean_hierarchy_weights": [
+    0.28085438758327674,
+    0.3713663270531909,
+    0.3477792853635324
+  ]
+}

@@ -1,4 +1,4 @@
-# YURIKA Audio 3.7.0 GitHub Candidate - FIX7 V3 Root Layout
+# YURIKA Audio 3.7.0 GitHub Candidate - FIX6 V3 Root Layout
 
 This package now follows the same repository layout as `YURIKA-Audio-V3.zip`: **the repository root itself is the Chrome extension root**.
 
@@ -21,8 +21,3 @@ YURIKA-Audio-V3\
 ```
 
 After success, GitHub Desktop should show the managed file changes immediately.
-
-## FIX7
-- Corrected `tests/audio_quality/run_fine_reports.py` repository-root resolution for GitHub Actions (`HERE.parents[1]`).
-- Added explicit `manifest.json` / evaluator path preflight checks.
-- Replayed the actual workflow artifact from run 36472772861 locally; all four rendered WAVs completed fine-report generation with zero safety flags.

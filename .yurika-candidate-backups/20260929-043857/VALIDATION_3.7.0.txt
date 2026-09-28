@@ -1,0 +1,52 @@
+YURIKA Audio GIRO MONATIUM 3.7.0 VALIDATION
+
+STATUS: PASS for implemented deterministic/local validation suite
+PRIMARY TARGET: 96 kHz, 128-frame Chrome AudioWorklet path
+ALGORITHMIC LOOKAHEAD: 0 frames
+
+BUILD / NUMERICAL
+- Controller coefficients: 60
+- Training/runtime controller max abs output parity error: 1.02618089354e-05 (JS double reference vs C++ float32; test bound < 2e-5)
+- Zero input: exact zero PASS
+- NaN/Infinity sanitization: PASS
+- Injection clamp: <= +/-0.025001 PASS
+- Same-elapsed-time Dart hierarchy 96k/512 vs 48k/256 max weight diff: 0
+
+BANDWIDTH EXTENSION ABLATION
+- 10 kHz source, BWE-only generated 30 kHz amplitude: 4.78907113654e-06
+- BWE-only native-HF detector ratio: 0.000531203229912
+- With genuine 30 kHz support, native-HF detector ratio: 0.00238725868985
+- Generated 30 kHz amplitude with native support: 3.34288788527e-06
+- Relative BWE after native-hires protection: 0.698024 (lower is stronger suppression)
+
+CONTROLLER VALIDATION RMSE
+- Strategy: 0.0570870
+- BWE: 0.1464561
+- SR: 0.0335966
+- Real-track BWE: 0.0928401
+
+96 kHz SYNTHETIC PROCESSING PROBE (Node host; not a browser hard-real-time guarantee)
+- mean: 0.151588 ms / 128 frames
+- p95: 0.163324 ms
+- p99: 0.174760 ms
+- max: 2.540044 ms (host scheduling outlier)
+- 96 kHz / 128-frame quantum: 1.333333 ms
+
+10 s REAL-AUDIO PROCESSING PROBE
+- non-finite output samples: 0
+- output delta RMS: 6.68953286769e-06
+- mean BWE drive: 0.192154818
+- mean SR drive: 0.229059439
+- mean native-HF ratio: 0.00016106284799
+- mean process: 0.194268 ms
+- p95: 0.492794 ms
+- p99: 0.572995 ms
+- max: 3.406576 ms (host scheduling outlier)
+
+SCOPE / LIMITATIONS
+- Generated >24 kHz content is plausible synthesis, not exact restoration of absent source information.
+- The supplied long real recording contains little >24 kHz energy, so procedural paired truth is needed for BWE coverage.
+- One real recording does not establish genre-wide subjective quality.
+- Node-host timing does not prove deadline behavior on every Chrome/device combination; the Worklet retains consecutive-overrun bypass.
+- Worklet quality-certified range is 88.2-100 kHz, with 96 kHz as the primary target.
+- 45B/model inference was not used.

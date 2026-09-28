@@ -1,0 +1,87 @@
+YURIKA Audio - GIRO MONATIUM 3.5.3
+STABILITY + SIGNAL PATH FIX / LOCAL VALIDATION
+
+Scope
+-----
+Local static validation and focused JavaScript micro-tests were run against the packaged source.
+This environment cannot perform a real Chrome + physical audio-device listening test, so runtime behavior on the user's exact device must still be verified in Chrome.
+
+1. JavaScript / manifest integrity
+--------------------------------
+PASS: node --check completed for all 35 JavaScript files in the package.
+PASS: manifest.json parsed successfully as JSON.
+PASS: manifest version = 3.5.3.
+
+2. Safety / dropout containment
+-------------------------------
+PASS: safety-meter-worklet replaces non-finite samples with 0 before output.
+PASS: an immediate {type:"fault"} message is emitted when the fourth non-finite sample is observed, instead of waiting for the 4096-frame statistics report.
+PASS: offscreen.js handles the fault by crossfading processed audio to the clean captured-input safety bypass, rather than intentionally muting the whole output.
+PASS: after stable safety reports, the processed path is restored with a slow crossfade.
+PASS: startup graph contains a temporary bootstrap direct path for captured-tab audio while Worklets/WASM/DSP nodes are initialized.
+PASS: AudioContext resume is attempted before tabCapture consumption, and retried after capture if still suspended.
+
+3. Video-start / high-frequency false-trigger checks
+----------------------------------------------------
+PASS: startup/onset grace suppresses seam/transient intervention during the first 180 ms after DSP start.
+PASS: after >=120 ms detected silence, the first audible report receives a 140 ms onset grace period.
+PASS: Spark discontinuity detector now uses derivative peak/RMS sparsity, not raw adjacent-sample change alone.
+Actual-worklet synthetic test:
+  48 kHz, 12 kHz sine: discontinuity 0.00000, derivative sparsity 1.001
+  48 kHz, isolated click: discontinuity 1.00000, derivative sparsity 13.856
+  96 kHz, 12 kHz sine: discontinuity 0.00000, derivative sparsity 1.308
+  96 kHz, isolated click: discontinuity 1.00000, derivative sparsity 19.596
+Adaptive seam-confidence micro-test:
+  sustained bright HF case: 0.01066
+  sparse splice/click case:   0.60131
+  ordinary transient case:    0.01335
+Result: sustained high-frequency energy is strongly rejected while sparse discontinuities remain detectable.
+
+4. AudioParam scheduling
+------------------------
+PASS: smooth() has a target deadband so unchanged AudioParam targets are not continuously cancelled/re-scheduled.
+PASS: Voice Material dynamic updates are rate-limited and skipped entirely when the feature is disabled.
+PASS: Seam dynamic application is rate-limited.
+
+5. DAC Matrix
+-------------
+PASS: Strength 0% selects true bypass (bypass gain 1, processed gain 0).
+PASS: transparent 0%-strength profile restores 24 kHz baseline cutoff instead of retaining a model-specific low-pass.
+PASS: changing AKM/ESS/TI Fusion weights rebuilds the WaveShaper curve.
+Micro-test: AKM -> ESS Fusion weight change produced a different curve object.
+
+6. Integrity
+------------
+PASS: Strength now controls a real complementary dry/DC-blocked blend.
+Micro-test, Ground Reference:
+  Strength 0%:   dry 1.000 / DC path 0.000
+  Strength 50%:  dry 0.500 / DC path 0.500
+  Strength 100%: dry 0.000 / DC path 1.000
+PASS: low-frequency DC blocking uses stable first-order IIR topology suitable for 96 kHz operation.
+
+7. Room
+-------
+PASS: room decaySeconds is now used to regenerate the deterministic reflection IR.
+Micro-test: Diffusion profile decay = 0.046 s and caused IR regeneration.
+
+8. Spatial / scene / reflection
+-------------------------------
+PASS: device-profile distanceStrength now contributes to spatial depth.
+PASS: computed ILD now contributes to side contrast while preserving left/right neutrality.
+PASS: safeHeadroom now contributes to output compensation.
+PASS: active Scene Dynamics refreshes Spatial parameters at a bounded ~180 ms cadence.
+PASS: Reflection Character refreshes from current pulse/speech state at a bounded ~120 ms cadence.
+
+9. Headphone calibration
+------------------------
+PASS: measured correction gains are applied only when headphoneCalibrationMode == "measurement".
+PASS: profile-only mode no longer accidentally behaves as measurement correction.
+
+10. 5-Stem
+----------
+PASS: default changed to OFF because the current five-way split transparently reconstructs the input and has no independent per-stem tonal/mix processing.
+PASS: explicitly enabling it remains supported for analysis/diagnostic use.
+
+Known validation limit
+----------------------
+These tests verify source integrity, control routing, detector behavior and focused DSP-control semantics. They do not substitute for an end-to-end Chrome listening test with the user's DAC, Windows audio stack, YouTube stream, sample-rate negotiation and CPU scheduling.

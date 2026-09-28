@@ -1,0 +1,98 @@
+name: Audio Quality
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "manifest.json"
+      - "*.js"
+      - "*.wasm"
+      - "dart-detector/**"
+      - "controller-training/**"
+      - "matlab-numeric/**"
+      - "sr-training/**"
+      - "tests/**"
+      - "tools/**"
+      - ".yurika-test-candidate*.json"
+      - ".github/workflows/audio-quality.yml"
+  pull_request:
+    paths:
+      - "manifest.json"
+      - "*.js"
+      - "*.wasm"
+      - "dart-detector/**"
+      - "controller-training/**"
+      - "matlab-numeric/**"
+      - "sr-training/**"
+      - "tests/**"
+      - "tools/**"
+      - ".yurika-test-candidate*.json"
+      - ".github/workflows/audio-quality.yml"
+
+jobs:
+  quality:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+      - name: Candidate metadata
+        shell: bash
+        run: |
+          if [ -f .yurika-test-candidate.json ]; then
+            cat .yurika-test-candidate.json
+            cat .yurika-test-candidate.json >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Python dependencies
+        run: python -m pip install --disable-pip-version-check -r tools/requirements-audio-eval.txt
+      - name: Candidate static self-test
+        run: python tests/candidate_static_test.py
+      - name: AI SR workflow wiring self-test
+        run: python tests/ci_ai_sr_wiring_test.py
+      - name: Fine evaluator deterministic self-test
+        run: python tools/audio_quality_eval.py --selftest
+      - name: JavaScript syntax check for managed candidate files
+        shell: bash
+        run: |
+          python - <<'PY2'
+          import json, subprocess
+          from pathlib import Path
+          for rel in json.loads(Path('.yurika-test-candidate-files.json').read_text(encoding='utf-8')):
+              if rel.endswith('.js') and Path(rel).is_file():
+                  subprocess.run(['node','--check',rel],check=True)
+          PY2
+      - name: Generate 96 kHz AI-SR stimuli
+        run: python tests/audio_quality/generate_ai_sr_stimulus.py
+      - name: Install Playwright Chromium
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Render actual YURIKA 3.7 root extension graph
+        run: xvfb-run -a node tests/audio_quality/run_playwright.mjs
+      - name: Fine-grained BWE + perceptual SR analysis
+        run: python tests/audio_quality/run_fine_reports.py
+      - name: Assert fine artifacts exist
+        shell: bash
+        run: |
+          test -s tests/audio_quality/results/fine-report.md
+          test -s tests/audio_quality/results/lowband-ai40-fine.json
+          test -s tests/audio_quality/results/lowband-ai80-fine.json
+          test -s tests/audio_quality/results/nativehf-ai40-fine.json
+      - name: Job summary
+        if: always()
+        shell: bash
+        run: |
+          if [ -f tests/audio_quality/results/fine-report.md ]; then
+            cat tests/audio_quality/results/fine-report.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Upload audio quality artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: yurika-audio-quality
+          path: tests/audio_quality/results/
+          if-no-files-found: warn

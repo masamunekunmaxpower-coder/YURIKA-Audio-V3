@@ -27,9 +27,6 @@ for token in [
 rt=txt('tests/audio_quality/runtime.js')
 req('aiHiResEnabled=true' in rt and 'aiHiResAmount=40' in rt and 'aiHiResAmount=80' in rt,'AI profile wiring missing')
 req('sampleRate:96000' in rt,'96k runtime request missing')
-fine=txt('tests/audio_quality/run_fine_reports.py')
-req('ROOT=HERE.parents[1]' in fine,'fine report runner repo-root calculation must use HERE.parents[1]')
-req("EVAL=ROOT/'tools'/'audio_quality_eval.py'" in fine,'fine report evaluator path wiring missing')
 runner=txt('tests/audio_quality/run_playwright.mjs')
 for name in ['lowband-neutral96','lowband-ai40','lowband-ai80','nativehf-ai40']:
     req(name in runner,f'render job missing: {name}')

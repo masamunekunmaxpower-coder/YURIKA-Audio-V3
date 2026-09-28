@@ -3,12 +3,8 @@ import json, subprocess, sys
 from pathlib import Path
 
 HERE=Path(__file__).resolve().parent
-ROOT=HERE.parents[1]
+ROOT=HERE.parents[2]
 EVAL=ROOT/'tools'/'audio_quality_eval.py'
-if not (ROOT/'manifest.json').is_file():
-    raise SystemExit(f'invalid repository root: manifest.json missing at {ROOT}')
-if not EVAL.is_file():
-    raise SystemExit(f'evaluator missing: {EVAL}')
 RES=HERE/'results'
 RES.mkdir(parents=True,exist_ok=True)
 JOBS=[

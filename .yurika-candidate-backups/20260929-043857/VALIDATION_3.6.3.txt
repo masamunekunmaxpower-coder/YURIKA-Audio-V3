@@ -1,0 +1,32 @@
+YURIKA Audio 3.6.3 MATLAB Numeric + C++ Wasm + Dart Object Index
+Validation summary
+
+Architecture
+- MATLAB source defines frequency/resolution numerical shaping and header export contract.
+- MATLAB/MATLAB Coder was NOT available on this build host. cpp-ai/generated_numeric_coeffs.h is marked YURIKA_NUMERIC_MATLAB_GENERATED=0 and is a manual mirror of the documented equations.
+- C++ performs hierarchical 697-parameter neural inference, causal residual derivative shaping, high-pass synthesis, sanitization and probe metrics.
+- C++ is compiled to a local packaged WebAssembly module. WebAssembly.Module imports: 0.
+- Dart detector is non-AI and uses typed object indices: 1=micro, 2=local, 3=context. All three retain continuous scores. dominantIndex is diagnostic only.
+- JavaScript is browser glue/control and audio block marshalling only.
+
+Executed tests
+- C++ Wasm size: 12,973 bytes.
+- C++ Wasm deterministic rebuild SHA: PASS.
+- Node/V8 96 kHz / stereo / 128 frames: mean 0.116 ms, p95 0.175 ms, p99 0.330 ms in the validation run. Host-specific benchmark, not a browser/device guarantee.
+- Zero input: max output 0.
+- Full-scale input: finite output and absolute max <= 1.0.
+- NaN/Infinity input: finite output.
+- 48 kHz AudioWorklet: exact transparent bypass, max error 0.
+- Missing Wasm module: exact transparent bypass, max error 0.
+- Dart object schema: indices exactly [1,2,3], scores match l1/l2/l3.
+- Each continuous object score independently changes generated output in the fixture.
+- Changing dominantIndex alone: exact output difference 0.
+- JavaScript syntax failures: 0.
+- eval/new Function: 0.
+- Runtime model/network downloads: none.
+
+Important limits
+- MATLAB source was not executed or code-generated on this build host because MATLAB Coder is unavailable. The C++ mirror is explicit and inspectable.
+- Dart SDK is also unavailable on this build host, so the package contains detector.dart plus a browser JavaScript mirror of the same arithmetic. dart-detector/build.sh can replace it with dart2js output on a Dart-equipped machine.
+- End-to-end Chrome + physical DAC latency/listening was not measurable in this environment.
+- AI bandwidth extension estimates/generates missing high-frequency detail; it does not guarantee recovery of original lost source information.
